@@ -1,4 +1,5 @@
-﻿using MiniApi.Models;
+﻿using MiniApi.Data;
+using MiniApi.Models;
 
 namespace MiniApi.Extensions.Endpoints
 {
@@ -7,81 +8,43 @@ namespace MiniApi.Extensions.Endpoints
     {
         public static void MapItemEndpoints(this WebApplication app)
         {
-            var items = new List<Item>();
-            var idCounter = 1L;
-
             // GET all
-            app.MapGet("/items", () =>
+            app.MapGet("/items", async (ItemRepository repo) =>
             {
+                var items = await repo.GetAllAsync();
                 return Results.Ok(items);
             })
             .WithTags("Items");
 
             // GET by id
-            app.MapGet("/items/{id}", (long id) =>
+            app.MapGet("/items/{id}", async (int id, ItemRepository repo) =>
             {
-                var item = items.FirstOrDefault(i => i.Id == id);
+                var item = await repo.GetByIdAsync(id);
                 return item is not null ? Results.Ok(item) : Results.NotFound();
             })
             .WithTags("Items");
 
             // POST
-            app.MapPost("/items", (CreateItemRequest req) =>
+            app.MapPost("/items", async (CreateItemRequest req, ItemRepository repo) =>
             {
-                Item item = new Item
-                {
-                    Id = idCounter++,
-                    Name = req.Name,
-                    Description = req.Description,
-                    Price = (double)req.Price,
-                    Stock = req.Stock,
-                    CreatedAt = DateTime.UtcNow.ToString("o")
-                };
-
-                items.Add(item);
-
+                var item = await repo.CreateAsync(req);
                 return Results.Ok(item);
             })
             .WithTags("Items");
 
             // PUT
-            app.MapPut("/items/{id}", (long id, UpdateItemRequest req) =>
+            app.MapPut("/items/{id}", async (int id, UpdateItemRequest req, ItemRepository repo) =>
             {
-                // Log de ejemplo
-                var logger = app.Services.GetRequiredService<ILogger<Program>>();
-                logger.LogError("El id es: " + id);
-                var existing = items.FirstOrDefault(i => i.Id == id);
-
-                if (existing is null)
-                    return Results.NotFound();
-
-                var updated = existing with
-                {
-                    Name = req.Name,
-                    Description = req.Description,
-                    Price = (double)req.Price,
-                    Stock = req.Stock,
-                    UpdatedAt = DateTime.UtcNow.ToString("o")
-                };
-
-                items.Remove(existing);
-                items.Add(updated);
-
-                return Results.Ok(updated);
+                var updated = await repo.UpdateAsync(id, req);
+                return updated ? Results.Ok() : Results.NotFound();
             })
             .WithTags("Items");
 
             // DELETE
-            app.MapDelete("/items/{id}", (long id) =>
+            app.MapDelete("/items/{id}", async (int id, ItemRepository repo) =>
             {
-                var item = items.FirstOrDefault(i => i.Id == id);
-
-                if (item is null)
-                    return Results.NotFound();
-
-                items.Remove(item);
-
-                return Results.Ok();
+                var deleted = await repo.DeleteAsync(id);
+                return deleted ? Results.Ok() : Results.NotFound();
             })
             .WithTags("Items");
         }
