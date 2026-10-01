@@ -45,5 +45,4 @@ packages/
 # =========================
 # Environment / secrets
 # =========================
-appsettings.Development.json
 appsettings.Local.json
