@@ -37,6 +37,11 @@ public class DatabaseInitializer
             );
         """);
 
+        connection.Execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_products_nombre_categoria
+            ON products (LOWER(nombre), LOWER(categoria));
+        """);
+
         _logger.LogInformation(
             "SQLite inicializado correctamente → {db}",
             connectionString);

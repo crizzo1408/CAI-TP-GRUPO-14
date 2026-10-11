@@ -81,6 +81,28 @@ public class ItemRepository
 
         return row is null ? null : ToProduct(row);
     }
+    public async Task<bool> ExistsByNameAndCategoryAsync(
+    string nombre,
+    string categoria,
+    Guid? excludeId = null)
+    {
+        using var conn = CreateConnection();
+
+        var count = await conn.ExecuteScalarAsync<int>("""
+            SELECT COUNT(1)
+            FROM products
+            WHERE LOWER(nombre) = LOWER(@Nombre)
+              AND LOWER(categoria) = LOWER(@Categoria)
+              AND (@ExcludeId IS NULL OR id <> @ExcludeId)
+        """, new
+        {
+            Nombre = nombre.Trim(),
+            Categoria = categoria.Trim(),
+            ExcludeId = excludeId?.ToString()
+        });
+
+        return count > 0;
+    }
 
     public async Task<Product> CreateAsync(CreateProductRequest request)
     {
