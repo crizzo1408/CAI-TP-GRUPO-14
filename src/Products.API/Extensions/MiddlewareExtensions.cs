@@ -29,6 +29,18 @@ namespace MiniApi.Extensions
             {
                 ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
             });
+
+            app.MapHealthChecks("/health/ready", new HealthCheckOptions
+            {
+                Predicate = check => check.Tags.Contains("database"),
+                ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+            });
+
+            app.MapHealthChecks("/health/live", new HealthCheckOptions
+            {
+                Predicate = check => check.Tags.Contains("api"),
+                ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+            });
             app.MapHealthChecksUI(setup => setup.UIPath = "/health-ui");
         }
     }
