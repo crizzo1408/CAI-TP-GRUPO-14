@@ -8,7 +8,12 @@ namespace MiniApi.Extensions
         public static void AddAppServices(this IServiceCollection services)
         {
             services.AddSingleton<DatabaseInitializer>();
-            services.AddScoped<ItemRepository>();
+            services.AddScoped<OrderRepository>();
+
+            // Clientes HTTP hacia los otros microservicios
+            services.AddHttpClient("Users", c => c.BaseAddress = new Uri("http://localhost:5002"));
+            services.AddHttpClient("Products", c => c.BaseAddress = new Uri("http://localhost:5001"));
+
             services.AddEndpointsApiExplorer();
             services.AddSwaggerGen();
 
