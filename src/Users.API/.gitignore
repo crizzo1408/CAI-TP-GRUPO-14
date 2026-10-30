@@ -5,3 +5,8 @@ logs/
 *.db-shm
 *.db-wal
 *.user
+
+# El .gitignore de la raíz ignora appsettings.Development.json (por secretos).
+# En este servicio no contiene secretos: solo el nivel de detalle de los errores
+# por entorno (consigna 5.2) y el usuario de prueba. Por eso acá SÍ se sube.
+!appsettings.Development.json
