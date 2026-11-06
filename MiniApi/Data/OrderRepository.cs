@@ -12,153 +12,208 @@ namespace MiniApi.Data
     {
         private readonly IConfiguration _config;
 
-        public OrderRepository(IConfiguration config) => _config = config;
-
-        private SqliteConnection CreateConnection() =>
-            new(_config.GetConnectionString("DefaultConnection") ?? "Data Source=app.db");
-
-        // Filas tal cual salen de SQLite (Guid y fechas se guardan como TEXT)
-        private record OrderRow
+        public OrderRepository(IConfiguration config)
         {
-            public string Id { get; init; } = string.Empty;
-            public string UsuarioId { get; init; } = string.Empty;
-            public double Total { get; init; }
-            public string Estado { get; init; } = string.Empty;
-            public string FechaCreacion { get; init; } = string.Empty;
+            _config = config;
         }
 
-        private record OrderItemRow
+        private SqliteConnection CreateConnection()
         {
-            public string OrderId { get; init; } = string.Empty;
-            public string ProductoId { get; init; } = string.Empty;
-            public long Cantidad { get; init; }
-            public double PrecioUnitario { get; init; }
-        }
-
-        private static string Now() =>
-            DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
-
-        private static DateTime ParseDate(string s) =>
-            DateTime.Parse(s, CultureInfo.InvariantCulture,
-                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
-
-        private static Order ToOrder(OrderRow r, IEnumerable<OrderItemRow> items) => new()
-        {
-            Id = Guid.Parse(r.Id),
-            UsuarioId = Guid.Parse(r.UsuarioId),
-            Total = decimal.Round((decimal)r.Total, 2),
-            Estado = r.Estado,
-            FechaCreacion = ParseDate(r.FechaCreacion),
-            Items = items.Select(i => new OrderItem
+            string? connectionString = _config.GetConnectionString("DefaultConnection");
+            if (string.IsNullOrEmpty(connectionString))
             {
-                ProductoId = Guid.Parse(i.ProductoId),
-                Cantidad = (int)i.Cantidad,
-                PrecioUnitario = decimal.Round((decimal)i.PrecioUnitario, 2)
-            }).ToList()
-        };
-
-        //GET ALL (filtro opcional por usuario)
-        public async Task<IEnumerable<Order>> GetAllAsync(Guid? usuarioId)
-        {
-            using var conn = CreateConnection();
-
-            var rows = (await conn.QueryAsync<OrderRow>("""
-            SELECT id, usuario_id AS UsuarioId, total, estado, fecha_creacion AS FechaCreacion
-            FROM orders
-            WHERE (@usuarioId IS NULL OR usuario_id = @usuarioId)
-            ORDER BY fecha_creacion DESC
-        """, new { usuarioId = usuarioId?.ToString() })).ToList();
-
-            if (rows.Count == 0) return new List<Order>();
-
-            var items = await conn.QueryAsync<OrderItemRow>("""
-            SELECT order_id AS OrderId, producto_id AS ProductoId, cantidad,
-                   precio_unitario AS PrecioUnitario
-            FROM order_items
-            WHERE order_id IN @ids
-        """, new { ids = rows.Select(r => r.Id).ToList() });
-
-            var byOrder = items.ToLookup(i => i.OrderId);
-            return rows.Select(r => ToOrder(r, byOrder[r.Id])).ToList();
+                connectionString = "Data Source=app.db";
+            }
+            return new SqliteConnection(connectionString);
         }
 
-        //GET BY ID 
+     
+        public class OrderRow
+        {
+            public string Id { get; set; } = string.Empty;
+            public string UsuarioId { get; set; } = string.Empty;
+            public double Total { get; set; }
+            public string Estado { get; set; } = string.Empty;
+            public string FechaCreacion { get; set; } = string.Empty;
+        }
+
+        public class OrderItemRow
+        {
+            public string ProductoId { get; set; } = string.Empty;
+            public long Cantidad { get; set; }
+            public double PrecioUnitario { get; set; }
+        }
+
+        private static string Now()
+        {
+            return DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
+        }
+
+        private static DateTime ParseDate(string s)
+        {
+            return DateTime.Parse(s, CultureInfo.InvariantCulture,
+                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
+        }
+
+        private static Order ToOrder(OrderRow row, List<OrderItem> items)
+        {
+            return new Order
+            {
+                Id = Guid.Parse(row.Id),
+                UsuarioId = Guid.Parse(row.UsuarioId),
+                Total = decimal.Round((decimal)row.Total, 2),
+                Estado = row.Estado,
+                FechaCreacion = ParseDate(row.FechaCreacion),
+                Items = items
+            };
+        }
+
+        
+        private static async Task<List<OrderItem>> GetItemsAsync(SqliteConnection conn, string orderId)
+        {
+            IEnumerable<OrderItemRow> rows = await conn.QueryAsync<OrderItemRow>("""
+                SELECT producto_id AS ProductoId, cantidad AS Cantidad, precio_unitario AS PrecioUnitario
+                FROM order_items
+                WHERE order_id = @OrderId
+            """, new { OrderId = orderId });
+
+            List<OrderItem> items = new List<OrderItem>();
+            foreach (OrderItemRow row in rows)
+            {
+                items.Add(new OrderItem
+                {
+                    ProductoId = Guid.Parse(row.ProductoId),
+                    Cantidad = (int)row.Cantidad,
+                    PrecioUnitario = decimal.Round((decimal)row.PrecioUnitario, 2)
+                });
+            }
+            return items;
+        }
+
+    
+        public async Task<List<Order>> GetAllAsync(Guid? usuarioId)
+        {
+            string? filtro = null;
+            if (usuarioId.HasValue)
+            {
+                filtro = usuarioId.Value.ToString();
+            }
+
+            using SqliteConnection conn = CreateConnection();
+            await conn.OpenAsync();
+
+            IEnumerable<OrderRow> rows = await conn.QueryAsync<OrderRow>("""
+                SELECT id AS Id, usuario_id AS UsuarioId, total AS Total, estado AS Estado,
+                       fecha_creacion AS FechaCreacion
+                FROM orders
+                WHERE (@UsuarioId IS NULL OR usuario_id = @UsuarioId)
+                ORDER BY fecha_creacion DESC
+            """, new { UsuarioId = filtro });
+
+            List<Order> orders = new List<Order>();
+            foreach (OrderRow row in rows)
+            {
+                List<OrderItem> items = await GetItemsAsync(conn, row.Id);
+                orders.Add(ToOrder(row, items));
+            }
+            return orders;
+        }
+
         public async Task<Order?> GetByIdAsync(Guid id)
         {
-            using var conn = CreateConnection();
+            using SqliteConnection conn = CreateConnection();
+            await conn.OpenAsync();
 
-            var row = await conn.QuerySingleOrDefaultAsync<OrderRow>("""
-            SELECT id, usuario_id AS UsuarioId, total, estado, fecha_creacion AS FechaCreacion
-            FROM orders
-            WHERE id = @id
-        """, new { id = id.ToString() });
+            OrderRow? row = await conn.QuerySingleOrDefaultAsync<OrderRow>("""
+                SELECT id AS Id, usuario_id AS UsuarioId, total AS Total, estado AS Estado,
+                       fecha_creacion AS FechaCreacion
+                FROM orders
+                WHERE id = @Id
+            """, new { Id = id.ToString() });
 
-            if (row is null) return null;
+            if (row == null)
+            {
+                return null;
+            }
 
-            var items = await conn.QueryAsync<OrderItemRow>("""
-            SELECT order_id AS OrderId, producto_id AS ProductoId, cantidad,
-                   precio_unitario AS PrecioUnitario
-            FROM order_items
-            WHERE order_id = @id
-        """, new { id = id.ToString() });
-
+            List<OrderItem> items = await GetItemsAsync(conn, row.Id);
             return ToOrder(row, items);
         }
 
-        //CREATE (orden + items en una sola transacción)
+        // CREATE (orden + items en una sola transacción). Estado inicial: Pendiente.
         public async Task<Order> CreateAsync(Guid usuarioId, List<OrderItem> items)
         {
-            var id = Guid.NewGuid().ToString();
-            var total = items.Sum(i => i.PrecioUnitario * i.Cantidad);
+            Guid id = Guid.NewGuid();
+            string fecha = Now();
 
-            using var conn = CreateConnection();
+            
+            decimal total = 0;
+            foreach (OrderItem item in items)
+            {
+                total = total + (item.PrecioUnitario * item.Cantidad);
+            }
+
+            using SqliteConnection conn = CreateConnection();
             await conn.OpenAsync();
-            using var tx = conn.BeginTransaction();
+            using SqliteTransaction tx = conn.BeginTransaction();
 
             await conn.ExecuteAsync("""
-            INSERT INTO orders (id, usuario_id, total, estado, fecha_creacion)
-            VALUES (@Id, @UsuarioId, @Total, @Estado, @FechaCreacion)
-        """, new
+                INSERT INTO orders (id, usuario_id, total, estado, fecha_creacion)
+                VALUES (@Id, @UsuarioId, @Total, @Estado, @FechaCreacion)
+            """, new
             {
-                Id = id,
+                Id = id.ToString(),
                 UsuarioId = usuarioId.ToString(),
                 Total = (double)total,
                 Estado = OrderStatus.Pendiente,
-                FechaCreacion = Now()
+                FechaCreacion = fecha
             }, tx);
 
-            await conn.ExecuteAsync("""
-            INSERT INTO order_items (order_id, producto_id, cantidad, precio_unitario)
-            VALUES (@OrderId, @ProductoId, @Cantidad, @PrecioUnitario)
-        """, items.Select(i => new
+            foreach (OrderItem item in items)
             {
-                OrderId = id,
-                ProductoId = i.ProductoId.ToString(),
-                i.Cantidad,
-                PrecioUnitario = (double)i.PrecioUnitario
-            }), tx);
+                await conn.ExecuteAsync("""
+                    INSERT INTO order_items (order_id, producto_id, cantidad, precio_unitario)
+                    VALUES (@OrderId, @ProductoId, @Cantidad, @PrecioUnitario)
+                """, new
+                {
+                    OrderId = id.ToString(),
+                    ProductoId = item.ProductoId.ToString(),
+                    Cantidad = item.Cantidad,
+                    PrecioUnitario = (double)item.PrecioUnitario
+                }, tx);
+            }
 
             tx.Commit();
 
-            return (await GetByIdAsync(Guid.Parse(id)))!;
+            return new Order
+            {
+                Id = id,
+                UsuarioId = usuarioId,
+                Items = items,
+                Total = decimal.Round(total, 2),
+                Estado = OrderStatus.Pendiente,
+                FechaCreacion = ParseDate(fecha)
+            };
         }
 
-        //UPDATE STATUS
-        // Devuelve la fecha de actualización aplicada, o null si la orden no existe
+        
         public async Task<DateTime?> UpdateStatusAsync(Guid id, string estado)
         {
-            var now = Now();
+            string fecha = Now();
 
-            using var conn = CreateConnection();
-            var rows = await conn.ExecuteAsync("""
-            UPDATE orders
-            SET estado = @Estado,
-                fecha_actualizacion = @Fecha
-            WHERE id = @Id
-        """, new { Estado = estado, Fecha = now, Id = id.ToString() });
+            using SqliteConnection conn = CreateConnection();
+            int filas = await conn.ExecuteAsync("""
+                UPDATE orders
+                SET estado = @Estado,
+                    fecha_actualizacion = @Fecha
+                WHERE id = @Id
+            """, new { Estado = estado, Fecha = fecha, Id = id.ToString() });
 
-            return rows > 0 ? ParseDate(now) : null;
+            if (filas == 0)
+            {
+                return null;
+            }
+            return ParseDate(fecha);
         }
     }
 }
-
