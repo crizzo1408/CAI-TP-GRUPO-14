@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Cart.API.Constants;
+using Cart.API.DTOs;
 
 namespace Cart.API.ExceptionHandlers;
 
@@ -13,46 +15,70 @@ public static class InvalidModelStateHandler
 {
     public static IActionResult CreateResponse(ActionContext context)
     {
-        var mensajes = context.ModelState
-            .Where(entry => entry.Value is { Errors.Count: > 0 })
-            .SelectMany(entry => entry.Value!.Errors.Select(error => Traducir(entry.Key, error)))
-            .Distinct()
-            .ToList();
-
-        // Se quita el punto final de cada mensaje para que queden "a; b; c." y no "a.; b.; c."
-        var errorMessage = mensajes.Count > 0
-            ? string.Join("; ", mensajes.Select(m => m.TrimEnd('.'))) + "."
-            : ErrorMessages.CRT_004;
-
-        var logger = context.HttpContext.RequestServices
-            .GetRequiredService<ILoggerFactory>()
-            .CreateLogger(typeof(InvalidModelStateHandler));
-        logger.LogWarning("Error de negocio {ErrorCode} (400): {ErrorMessage}", ErrorCodes.CRT_004, errorMessage);
-
-        var error = ErrorResponseFactory.Create(context.HttpContext, StatusCodes.Status400BadRequest,
-            ErrorCodes.CRT_004, errorMessage);
-
-        return new ObjectResult(error)
+        // 1. Juntar todos los mensajes de error, sin repetidos
+        var mensajes = new List<string>();
+        foreach (var entry in context.ModelState)
         {
-            StatusCode = StatusCodes.Status400BadRequest,
-            ContentTypes = { "application/problem+json" }
-        };
+            string campo = entry.Key;
+            ModelStateEntry estado = entry.Value;
+
+            foreach (ModelError error in estado.Errors)
+            {
+                string mensaje = Traducir(campo, error);
+                if (!mensajes.Contains(mensaje))
+                {
+                    mensajes.Add(mensaje);
+                }
+            }
+        }
+
+        // 2. Unirlos como "a; b; c." (se quita el punto final de cada uno para no dejar ".;")
+        string errorMessage = ErrorMessages.CRT_004;
+        if (mensajes.Count > 0)
+        {
+            var sinPuntoFinal = new List<string>();
+            foreach (string mensaje in mensajes)
+            {
+                sinPuntoFinal.Add(mensaje.TrimEnd('.'));
+            }
+            errorMessage = string.Join("; ", sinPuntoFinal) + ".";
+        }
+
+        // 3. Loguear como Warning (es un error de negocio)
+        ILoggerFactory loggerFactory = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>();
+        ILogger logger = loggerFactory.CreateLogger("InvalidModelStateHandler");
+        logger.LogWarning("Error {ErrorCode} (400): {ErrorMessage}", ErrorCodes.CRT_004, errorMessage);
+
+        // 4. Armar la respuesta con el formato de la consigna
+        ErrorResponse response = ErrorResponseFactory.Create(context.HttpContext, StatusCodes.Status400BadRequest,
+            ErrorCodes.CRT_004, errorMessage, null);
+
+        var result = new ObjectResult(response);
+        result.StatusCode = StatusCodes.Status400BadRequest;
+        return result;
     }
 
     /// <summary>
     /// Los mensajes de las Data Annotations ya están en español.
     /// Los que genera ASP.NET (JSON inválido, body vacío) vienen en inglés, así que se reemplazan.
     /// </summary>
-    private static string Traducir(string campo, Microsoft.AspNetCore.Mvc.ModelBinding.ModelError error)
+    private static string Traducir(string campo, ModelError error)
     {
-        if (campo.StartsWith('$') || error.Exception is not null)
+        if (campo.StartsWith("$") || error.Exception != null)
+        {
             return "El cuerpo de la solicitud no es un JSON válido o tiene campos con un tipo incorrecto.";
+        }
 
-        if (string.IsNullOrEmpty(campo) || campo.Equals("request", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrEmpty(campo) || campo.ToLower() == "request")
+        {
             return "El cuerpo de la solicitud es obligatorio.";
+        }
 
-        return string.IsNullOrWhiteSpace(error.ErrorMessage)
-            ? $"El campo '{campo}' es inválido."
-            : error.ErrorMessage;
+        if (string.IsNullOrWhiteSpace(error.ErrorMessage))
+        {
+            return "El campo '" + campo + "' es inválido.";
+        }
+
+        return error.ErrorMessage;
     }
 }

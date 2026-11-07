@@ -17,75 +17,100 @@ namespace Cart.API.Services;
 /// Los ids de la ruta llegan como texto: si no son un Guid válido se trata como "no encontrado"
 /// (o como dato inválido en el POST), así nunca se devuelve un status que la consigna no permite.
 /// </remarks>
-public class CartService(
-    ICartRepository repository,
-    IProductsClient productsClient,
-    ILogger<CartService> logger) : ICartService
+public class CartService : ICartService
 {
+    private readonly ICartRepository _repository;
+    private readonly IProductsClient _productsClient;
+    private readonly ILogger<CartService> _logger;
+
+    public CartService(ICartRepository repository, IProductsClient productsClient, ILogger<CartService> logger)
+    {
+        _repository = repository;
+        _productsClient = productsClient;
+        _logger = logger;
+    }
+
     public async Task<CartResponse> GetAsync(string userId)
     {
-        var cart = await GetExistingCartAsync(userId);
+        ShoppingCart cart = await GetExistingCartAsync(userId);
         return ToResponse(cart);
     }
 
     public async Task<CartResponse> AddItemAsync(string userId, AddCartItemRequest request)
     {
         // POST: el único código 400 del catálogo es CRT-004, se usa para todo dato inválido
-        if (!Guid.TryParse(userId, out var usuarioId))
-            throw new ValidationException(ErrorCodes.CRT_004, $"El userId '{userId}' no tiene un formato válido.");
+        Guid usuarioId;
+        if (!Guid.TryParse(userId, out usuarioId))
+        {
+            throw new ValidationException(ErrorCodes.CRT_004, "El userId '" + userId + "' no tiene un formato válido.");
+        }
 
-        ValidarCantidad(request.Cantidad!.Value);
-        var productoId = request.ProductoId!.Value;
+        // ProductoId y Cantidad ya vienen validados como obligatorios por [Required]
+        int cantidadPedida = request.Cantidad.Value;
+        Guid productoId = request.ProductoId.Value;
 
-        var product = await GetProductOrThrowAsync(productoId);
+        ValidarCantidad(cantidadPedida);
+
+        ProductDto product = await GetProductOrThrowAsync(productoId);
 
         // Si el producto ya estaba en el carrito, se suma la cantidad nueva
-        var cart = await repository.GetAsync(usuarioId);
-        var cantidadActual = cart?.Items.FirstOrDefault(i => i.ProductoId == productoId)?.Cantidad ?? 0;
-        var cantidadTotal = cantidadActual + request.Cantidad.Value;
+        int cantidadActual = 0;
+        ShoppingCart cart = await _repository.GetAsync(usuarioId);
+        if (cart != null)
+        {
+            CartItem itemExistente = BuscarItem(cart, productoId);
+            if (itemExistente != null)
+            {
+                cantidadActual = itemExistente.Cantidad;
+            }
+        }
+        int cantidadTotal = cantidadActual + cantidadPedida;
 
         ValidarStock(product, cantidadTotal);
 
-        await repository.SaveItemAsync(usuarioId, productoId, cantidadTotal, DateTime.UtcNow);
-        logger.LogInformation("Producto {ProductoId} agregado al carrito de {UsuarioId}. Cantidad total: {Cantidad}",
+        await _repository.SaveItemAsync(usuarioId, productoId, cantidadTotal, DateTime.UtcNow);
+        _logger.LogInformation("Producto {ProductoId} agregado al carrito de {UsuarioId}. Cantidad total: {Cantidad}",
             productoId, usuarioId, cantidadTotal);
 
-        return ToResponse((await repository.GetAsync(usuarioId))!);
+        ShoppingCart actualizado = await _repository.GetAsync(usuarioId);
+        return ToResponse(actualizado);
     }
 
     public async Task<CartResponse> UpdateItemAsync(string userId, string productId, UpdateCartItemRequest request)
     {
-        ValidarCantidad(request.Cantidad!.Value);
+        int cantidadNueva = request.Cantidad.Value;
+        ValidarCantidad(cantidadNueva);
 
-        var cart = await GetExistingCartAsync(userId);
-        var productoId = GetItemIdOrThrow(cart, productId);
+        ShoppingCart cart = await GetExistingCartAsync(userId);
+        Guid productoId = GetItemIdOrThrow(cart, productId);
 
         // El producto podría haberse borrado del catálogo o haber cambiado su stock
-        var product = await GetProductOrThrowAsync(productoId);
-        ValidarStock(product, request.Cantidad.Value);
+        ProductDto product = await GetProductOrThrowAsync(productoId);
+        ValidarStock(product, cantidadNueva);
 
-        await repository.SaveItemAsync(cart.UsuarioId, productoId, request.Cantidad.Value, DateTime.UtcNow);
-        logger.LogInformation("Cantidad del producto {ProductoId} actualizada a {Cantidad} en el carrito de {UsuarioId}",
-            productoId, request.Cantidad.Value, cart.UsuarioId);
+        await _repository.SaveItemAsync(cart.UsuarioId, productoId, cantidadNueva, DateTime.UtcNow);
+        _logger.LogInformation("Cantidad del producto {ProductoId} actualizada a {Cantidad} en el carrito de {UsuarioId}",
+            productoId, cantidadNueva, cart.UsuarioId);
 
-        return ToResponse((await repository.GetAsync(cart.UsuarioId))!);
+        ShoppingCart actualizado = await _repository.GetAsync(cart.UsuarioId);
+        return ToResponse(actualizado);
     }
 
     public async Task RemoveItemAsync(string userId, string productId)
     {
-        var cart = await GetExistingCartAsync(userId);
-        var productoId = GetItemIdOrThrow(cart, productId);
+        ShoppingCart cart = await GetExistingCartAsync(userId);
+        Guid productoId = GetItemIdOrThrow(cart, productId);
 
-        await repository.RemoveItemAsync(cart.UsuarioId, productoId, DateTime.UtcNow);
-        logger.LogInformation("Producto {ProductoId} quitado del carrito de {UsuarioId}", productoId, cart.UsuarioId);
+        await _repository.RemoveItemAsync(cart.UsuarioId, productoId, DateTime.UtcNow);
+        _logger.LogInformation("Producto {ProductoId} quitado del carrito de {UsuarioId}", productoId, cart.UsuarioId);
     }
 
     public async Task ClearAsync(string userId)
     {
-        var cart = await GetExistingCartAsync(userId);
+        ShoppingCart cart = await GetExistingCartAsync(userId);
 
-        await repository.ClearAsync(cart.UsuarioId, DateTime.UtcNow);
-        logger.LogInformation("Carrito de {UsuarioId} vaciado", cart.UsuarioId);
+        await _repository.ClearAsync(cart.UsuarioId, DateTime.UtcNow);
+        _logger.LogInformation("Carrito de {UsuarioId} vaciado", cart.UsuarioId);
     }
 
     // ── Validaciones ──────────────────────────────────────────────────────────
@@ -94,47 +119,95 @@ public class CartService(
     private static void ValidarCantidad(int cantidad)
     {
         if (cantidad <= 0)
+        {
             throw new ValidationException(ErrorCodes.CRT_004,
-                $"Cantidad inválida. Debe ser mayor a cero (recibido: {cantidad}).");
+                "Cantidad inválida. Debe ser mayor a cero (recibido: " + cantidad + ").");
+        }
     }
 
     /// <summary>CRT-003: la cantidad total no puede superar el stock disponible.</summary>
     private static void ValidarStock(ProductDto product, int cantidadSolicitada)
     {
         if (cantidadSolicitada > product.Stock)
+        {
             throw new BusinessRuleException(ErrorCodes.CRT_003,
-                $"Stock insuficiente. Disponible: {product.Stock}, solicitado: {cantidadSolicitada}.");
+                "Stock insuficiente. Disponible: " + product.Stock + ", solicitado: " + cantidadSolicitada + ".");
+        }
     }
 
     /// <summary>CRT-002: el producto tiene que existir en Products.API.</summary>
-    private async Task<ProductDto> GetProductOrThrowAsync(Guid productoId) =>
-        await productsClient.GetByIdAsync(productoId)
-        ?? throw new NotFoundException(ErrorCodes.CRT_002, $"Producto no encontrado: '{productoId}'.");
+    private async Task<ProductDto> GetProductOrThrowAsync(Guid productoId)
+    {
+        ProductDto product = await _productsClient.GetByIdAsync(productoId);
+        if (product == null)
+        {
+            throw new NotFoundException(ErrorCodes.CRT_002, "Producto no encontrado: '" + productoId + "'.");
+        }
+        return product;
+    }
 
     /// <summary>CRT-001: el usuario tiene que tener un carrito.</summary>
     private async Task<ShoppingCart> GetExistingCartAsync(string userId)
     {
-        if (!Guid.TryParse(userId, out var usuarioId))
+        Guid usuarioId;
+        if (!Guid.TryParse(userId, out usuarioId))
+        {
             throw new NotFoundException(ErrorCodes.CRT_001, ErrorMessages.CRT_001);
+        }
 
-        return await repository.GetAsync(usuarioId)
-               ?? throw new NotFoundException(ErrorCodes.CRT_001, ErrorMessages.CRT_001);
+        ShoppingCart cart = await _repository.GetAsync(usuarioId);
+        if (cart == null)
+        {
+            throw new NotFoundException(ErrorCodes.CRT_001, ErrorMessages.CRT_001);
+        }
+        return cart;
     }
 
     /// <summary>CRT-001: el producto tiene que estar dentro del carrito.</summary>
     private static Guid GetItemIdOrThrow(ShoppingCart cart, string productId)
     {
-        if (Guid.TryParse(productId, out var productoId) && cart.Items.Any(i => i.ProductoId == productoId))
-            return productoId;
+        Guid productoId;
+        if (Guid.TryParse(productId, out productoId))
+        {
+            CartItem item = BuscarItem(cart, productoId);
+            if (item != null)
+            {
+                return productoId;
+            }
+        }
 
         throw new NotFoundException(ErrorCodes.CRT_001,
-            $"Carrito no encontrado: el producto '{productId}' no está en el carrito.");
+            "Carrito no encontrado: el producto '" + productId + "' no está en el carrito.");
     }
 
-    private static CartResponse ToResponse(ShoppingCart cart) => new()
+    /// <summary>Recorre los items del carrito y devuelve el de ese producto, o null si no está.</summary>
+    private static CartItem BuscarItem(ShoppingCart cart, Guid productoId)
     {
-        UsuarioId = cart.UsuarioId,
-        FechaActualizacion = cart.FechaActualizacion,
-        Items = cart.Items.Select(i => new CartItemResponse { ProductoId = i.ProductoId, Cantidad = i.Cantidad }).ToList()
-    };
+        foreach (CartItem item in cart.Items)
+        {
+            if (item.ProductoId == productoId)
+            {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>Convierte la entidad ShoppingCart al DTO de respuesta.</summary>
+    private static CartResponse ToResponse(ShoppingCart cart)
+    {
+        var response = new CartResponse();
+        response.UsuarioId = cart.UsuarioId;
+        response.FechaActualizacion = cart.FechaActualizacion;
+
+        foreach (CartItem item in cart.Items)
+        {
+            var itemResponse = new CartItemResponse();
+            itemResponse.ProductoId = item.ProductoId;
+            itemResponse.Cantidad = item.Cantidad;
+            response.Items.Add(itemResponse);
+        }
+
+        return response;
+    }
 }

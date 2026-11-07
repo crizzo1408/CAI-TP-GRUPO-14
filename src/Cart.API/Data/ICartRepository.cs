@@ -8,7 +8,7 @@ namespace Cart.API.Data;
 public interface ICartRepository
 {
     /// <summary>Devuelve el carrito con sus items, o null si el usuario no tiene carrito.</summary>
-    Task<ShoppingCart?> GetAsync(Guid usuarioId);
+    Task<ShoppingCart> GetAsync(Guid usuarioId);
 
     /// <summary>Crea el carrito si no existe y guarda el item con la cantidad indicada (insert o update).</summary>
     Task SaveItemAsync(Guid usuarioId, Guid productoId, int cantidad, DateTime fechaActualizacion);

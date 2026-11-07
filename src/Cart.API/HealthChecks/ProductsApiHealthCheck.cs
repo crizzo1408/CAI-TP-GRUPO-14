@@ -7,26 +7,41 @@ namespace Cart.API.HealthChecks;
 /// Si no responde, Cart queda Degraded: sigue funcionando para consultar y borrar,
 /// pero no puede agregar ni modificar productos.
 /// </summary>
-public class ProductsApiHealthCheck(IHttpClientFactory httpClientFactory, IConfiguration configuration) : IHealthCheck
+public class ProductsApiHealthCheck : IHealthCheck
 {
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IConfiguration _configuration;
+
+    public ProductsApiHealthCheck(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+    {
+        _httpClientFactory = httpClientFactory;
+        _configuration = configuration;
+    }
+
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
-        var baseUrl = configuration["Services:ProductsApi:BaseUrl"];
+        string baseUrl = _configuration["Services:ProductsApi:BaseUrl"];
         try
         {
-            var client = httpClientFactory.CreateClient();
+            HttpClient client = _httpClientFactory.CreateClient();
             client.Timeout = TimeSpan.FromSeconds(3);
-            using var response = await client.GetAsync(new Uri(new Uri(baseUrl!), "health/live"), cancellationToken);
 
-            return response.IsSuccessStatusCode
-                ? HealthCheckResult.Healthy($"Products.API responde en {baseUrl}")
-                : new HealthCheckResult(context.Registration.FailureStatus,
-                    $"Products.API respondió {(int)response.StatusCode}");
+            var url = new Uri(new Uri(baseUrl), "health/live");
+            using HttpResponseMessage response = await client.GetAsync(url, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return HealthCheckResult.Healthy("Products.API responde en " + baseUrl);
+            }
+
+            // FailureStatus es Degraded (se configura al registrar el check)
+            return new HealthCheckResult(context.Registration.FailureStatus,
+                "Products.API respondió " + (int)response.StatusCode);
         }
         catch (Exception ex)
         {
             return new HealthCheckResult(context.Registration.FailureStatus,
-                $"Products.API no responde en {baseUrl}", ex);
+                "Products.API no responde en " + baseUrl, ex);
         }
     }
 }

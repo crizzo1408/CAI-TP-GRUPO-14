@@ -2,7 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
+    <!-- Nullable desactivado para no usar anotaciones como string? o el operador ! -->
+    <Nullable>disable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Cart.API</RootNamespace>
     <!-- Genera el XML con los comentarios /// para que Swagger los muestre -->

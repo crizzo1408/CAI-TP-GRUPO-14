@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Text.Json;
 using Microsoft.OpenApi;
 using Swashbuckle.AspNetCore.SwaggerGen;
@@ -13,44 +12,66 @@ namespace Cart.API.Swagger;
 /// </summary>
 public class ErrorExamplesOperationFilter : IOperationFilter
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 
     public void Apply(OpenApiOperation operation, OperationFilterContext context)
     {
-        if (operation.Responses is null) return;
-
-        var ejemplos = context.MethodInfo.GetCustomAttributes<SwaggerErrorExampleAttribute>();
-
-        foreach (var grupo in ejemplos.GroupBy(e => e.StatusCode))
+        if (operation.Responses == null)
         {
-            if (!operation.Responses.TryGetValue(grupo.Key.ToString(), out var response)) continue;
-            if (response is not OpenApiResponse openApiResponse || openApiResponse.Content is null) continue;
-            if (!openApiResponse.Content.TryGetValue("application/json", out var mediaType)) continue;
-            if (mediaType is not OpenApiMediaType media) continue;
+            return;
+        }
 
-            media.Examples ??= new Dictionary<string, IOpenApiExample>();
+        object[] atributos = context.MethodInfo.GetCustomAttributes(typeof(SwaggerErrorExampleAttribute), false);
 
-            foreach (var ejemplo in grupo)
+        foreach (object atributo in atributos)
+        {
+            var ejemplo = (SwaggerErrorExampleAttribute)atributo;
+
+            // Buscar en la documentación la respuesta de ese status (ej: "404")
+            if (!operation.Responses.TryGetValue(ejemplo.StatusCode.ToString(), out var respuesta))
             {
-                var problem = ProblemDefaults.For(ejemplo.StatusCode);
-                var error = new ErrorResponse
-                {
-                    Type = problem.Type,
-                    Title = problem.Title,
-                    Status = ejemplo.StatusCode,
-                    Detail = problem.Detail,
-                    Instance = "/" + context.ApiDescription.RelativePath,
-                    ErrorCode = ejemplo.ErrorCode,
-                    ErrorMessage = ejemplo.ErrorMessage,
-                    CorrelationId = "0f8fad5b-d9cb-469f-a165-70867728950e"
-                };
-
-                media.Examples[ejemplo.ErrorCode] = new OpenApiExample
-                {
-                    Summary = $"{ejemplo.ErrorCode}: {ejemplo.ErrorMessage}",
-                    Value = JsonSerializer.SerializeToNode(error, JsonOptions)
-                };
+                continue;
             }
+
+            var openApiResponse = respuesta as OpenApiResponse;
+            if (openApiResponse == null || openApiResponse.Content == null)
+            {
+                continue;
+            }
+
+            if (!openApiResponse.Content.TryGetValue("application/json", out var contenido))
+            {
+                continue;
+            }
+
+            var media = contenido as OpenApiMediaType;
+            if (media == null)
+            {
+                continue;
+            }
+
+            if (media.Examples == null)
+            {
+                media.Examples = new Dictionary<string, IOpenApiExample>();
+            }
+
+            // Armar el ErrorResponse de ejemplo, igual al que devuelve la API
+            ProblemInfo problem = ProblemDefaults.For(ejemplo.StatusCode);
+            var error = new ErrorResponse();
+            error.Type = problem.Type;
+            error.Title = problem.Title;
+            error.Status = ejemplo.StatusCode;
+            error.Detail = problem.Detail;
+            error.Instance = "/" + context.ApiDescription.RelativePath;
+            error.ErrorCode = ejemplo.ErrorCode;
+            error.ErrorMessage = ejemplo.ErrorMessage;
+            error.CorrelationId = "0f8fad5b-d9cb-469f-a165-70867728950e";
+
+            var openApiExample = new OpenApiExample();
+            openApiExample.Summary = ejemplo.ErrorCode + ": " + ejemplo.ErrorMessage;
+            openApiExample.Value = JsonSerializer.SerializeToNode(error, JsonOptions);
+
+            media.Examples[ejemplo.ErrorCode] = openApiExample;
         }
     }
 }

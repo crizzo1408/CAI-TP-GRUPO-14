@@ -14,8 +14,15 @@ namespace Cart.API.Controllers;
 [ApiController]
 [Route("api/cart")]
 [Produces("application/json")]
-public class CartController(ICartService cartService) : ControllerBase
+public class CartController : ControllerBase
 {
+    private readonly ICartService _cartService;
+
+    public CartController(ICartService cartService)
+    {
+        _cartService = cartService;
+    }
+
     /// <summary>
     /// Obtiene el carrito de un usuario.
     /// </summary>
@@ -31,7 +38,8 @@ public class CartController(ICartService cartService) : ControllerBase
     [SwaggerErrorExample(StatusCodes.Status500InternalServerError, ErrorCodes.CRT_005, ErrorMessages.CRT_005)]
     public async Task<ActionResult<CartResponse>> Get(string userId)
     {
-        return Ok(await cartService.GetAsync(userId));
+        CartResponse cart = await _cartService.GetAsync(userId);
+        return Ok(cart);
     }
 
     /// <summary>
@@ -60,7 +68,8 @@ public class CartController(ICartService cartService) : ControllerBase
     [SwaggerErrorExample(StatusCodes.Status500InternalServerError, ErrorCodes.CRT_005, "No se pudo comunicar con Products.API para validar el producto.")]
     public async Task<ActionResult<CartResponse>> AddItem(string userId, [FromBody] AddCartItemRequest request)
     {
-        return Ok(await cartService.AddItemAsync(userId, request));
+        CartResponse cart = await _cartService.AddItemAsync(userId, request);
+        return Ok(cart);
     }
 
     /// <summary>
@@ -90,7 +99,8 @@ public class CartController(ICartService cartService) : ControllerBase
     [SwaggerErrorExample(StatusCodes.Status500InternalServerError, ErrorCodes.CRT_005, ErrorMessages.CRT_005)]
     public async Task<ActionResult<CartResponse>> UpdateItem(string userId, string productId, [FromBody] UpdateCartItemRequest request)
     {
-        return Ok(await cartService.UpdateItemAsync(userId, productId, request));
+        CartResponse cart = await _cartService.UpdateItemAsync(userId, productId, request);
+        return Ok(cart);
     }
 
     /// <summary>
@@ -109,7 +119,7 @@ public class CartController(ICartService cartService) : ControllerBase
     [SwaggerErrorExample(StatusCodes.Status500InternalServerError, ErrorCodes.CRT_005, ErrorMessages.CRT_005)]
     public async Task<IActionResult> RemoveItem(string userId, string productId)
     {
-        await cartService.RemoveItemAsync(userId, productId);
+        await _cartService.RemoveItemAsync(userId, productId);
         return NoContent();
     }
 
@@ -131,7 +141,7 @@ public class CartController(ICartService cartService) : ControllerBase
     [SwaggerErrorExample(StatusCodes.Status500InternalServerError, ErrorCodes.CRT_005, ErrorMessages.CRT_005)]
     public async Task<IActionResult> Clear(string userId)
     {
-        await cartService.ClearAsync(userId);
+        await _cartService.ClearAsync(userId);
         return NoContent();
     }
 }

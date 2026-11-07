@@ -7,7 +7,7 @@ namespace Cart.API.Models;
 public class ShoppingCart
 {
     public Guid UsuarioId { get; set; }
-    public List<CartItem> Items { get; set; } = [];
+    public List<CartItem> Items { get; set; } = new List<CartItem>();
 
     /// <summary>Se actualiza automáticamente en cada operación.</summary>
     public DateTime FechaActualizacion { get; set; }
