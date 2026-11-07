@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Users.API.DTOs;
 using Users.API.Middleware;
 
@@ -8,25 +9,38 @@ namespace Users.API.ExceptionHandlers;
 /// </summary>
 public static class ErrorResponseFactory
 {
-    public static ErrorResponse Create(HttpContext context, int statusCode, string errorCode, string errorMessage, string? detail = null)
+    // Web = nombres en camelCase (errorCode, errorMessage, ...)
+    private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+
+    // Si detail es null se usa el detail estándar del status
+    public static ErrorResponse Create(HttpContext context, int statusCode, string errorCode, string errorMessage, string detail)
     {
-        var problem = ProblemDefaults.For(statusCode);
-        return new ErrorResponse
+        ProblemInfo problem = ProblemDefaults.For(statusCode);
+
+        var error = new ErrorResponse();
+        error.Type = problem.Type;
+        error.Title = problem.Title;
+        error.Status = statusCode;
+        error.Detail = problem.Detail;
+        error.Instance = context.Request.Path.ToString();
+        error.ErrorCode = errorCode;
+        error.ErrorMessage = errorMessage;
+        error.CorrelationId = context.Items[CorrelationIdMiddleware.ItemKey] as string;
+
+        if (detail != null)
         {
-            Type = problem.Type,
-            Title = problem.Title,
-            Status = statusCode,
-            Detail = detail ?? problem.Detail,
-            Instance = context.Request.Path.Value ?? string.Empty,
-            ErrorCode = errorCode,
-            ErrorMessage = errorMessage,
-            CorrelationId = context.Items[CorrelationIdMiddleware.ItemKey] as string
-        };
+            error.Detail = detail;
+        }
+
+        return error;
     }
 
     public static async Task WriteAsync(HttpContext context, ErrorResponse error, CancellationToken cancellationToken)
     {
         context.Response.StatusCode = error.Status;
-        await context.Response.WriteAsJsonAsync(error, options: null, contentType: "application/problem+json", cancellationToken);
+        context.Response.ContentType = "application/problem+json";
+
+        string json = JsonSerializer.Serialize(error, JsonOptions);
+        await context.Response.WriteAsync(json, cancellationToken);
     }
 }

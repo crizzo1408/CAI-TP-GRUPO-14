@@ -9,11 +9,11 @@ public class LoginResponse
     public Guid Id { get; set; }
 
     /// <example>María</example>
-    public string Nombre { get; set; } = string.Empty;
+    public string Nombre { get; set; }
 
     /// <example>González</example>
-    public string Apellido { get; set; } = string.Empty;
+    public string Apellido { get; set; }
 
     /// <example>maria@email.com</example>
-    public string Email { get; set; } = string.Empty;
+    public string Email { get; set; }
 }

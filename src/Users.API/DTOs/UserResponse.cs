@@ -10,13 +10,13 @@ public class UserResponse
     public Guid Id { get; set; }
 
     /// <example>María</example>
-    public string Nombre { get; set; } = string.Empty;
+    public string Nombre { get; set; }
 
     /// <example>González</example>
-    public string Apellido { get; set; } = string.Empty;
+    public string Apellido { get; set; }
 
     /// <example>maria@email.com</example>
-    public string Email { get; set; } = string.Empty;
+    public string Email { get; set; }
 
     /// <example>2024-03-10T09:00:00Z</example>
     public DateTime FechaRegistro { get; set; }

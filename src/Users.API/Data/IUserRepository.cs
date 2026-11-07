@@ -7,7 +7,8 @@ namespace Users.API.Data;
 /// </summary>
 public interface IUserRepository
 {
-    Task<User?> GetByEmailAsync(string email);
+    /// <summary>Devuelve el usuario con ese email, o null si no existe.</summary>
+    Task<User> GetByEmailAsync(string email);
     Task<bool> ExistsByEmailAsync(string email);
     Task CreateAsync(User user);
     Task UpdateLoginStateAsync(Guid id, bool activo, int intentosFallidos);

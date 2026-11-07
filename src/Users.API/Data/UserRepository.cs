@@ -6,17 +6,42 @@ using Users.API.Models;
 namespace Users.API.Data;
 
 /// <summary>
+/// Fila de la tabla users tal como viene de SQLite (todo TEXT o INTEGER).
+/// Dapper llena esta clase y después se convierte a User con los tipos reales.
+/// </summary>
+public class UserRow
+{
+    public string Id { get; set; }
+    public string Nombre { get; set; }
+    public string Apellido { get; set; }
+    public string Email { get; set; }
+    public string PasswordHash { get; set; }
+    public string FechaRegistro { get; set; }
+    public long Activo { get; set; }
+    public long IntentosFallidos { get; set; }
+}
+
+/// <summary>
 /// Implementación con SQLite + Dapper (mismo patrón que ItemRepository de la plantilla).
 /// </summary>
-public class UserRepository(IConfiguration configuration) : IUserRepository
+public class UserRepository : IUserRepository
 {
-    private SqliteConnection CreateConnection() =>
-        new(configuration.GetConnectionString("DefaultConnection"));
+    private readonly IConfiguration _configuration;
 
-    public async Task<User?> GetByEmailAsync(string email)
+    public UserRepository(IConfiguration configuration)
+    {
+        _configuration = configuration;
+    }
+
+    private SqliteConnection CreateConnection()
+    {
+        return new SqliteConnection(_configuration.GetConnectionString("DefaultConnection"));
+    }
+
+    public async Task<User> GetByEmailAsync(string email)
     {
         using var connection = CreateConnection();
-        var row = await connection.QuerySingleOrDefaultAsync<UserRow>("""
+        UserRow row = await connection.QuerySingleOrDefaultAsync<UserRow>(@"
             SELECT id                AS Id,
                    nombre            AS Nombre,
                    apellido          AS Apellido,
@@ -26,75 +51,80 @@ public class UserRepository(IConfiguration configuration) : IUserRepository
                    activo            AS Activo,
                    intentos_fallidos AS IntentosFallidos
             FROM users
-            WHERE email = @email
-            """, new { email });
+            WHERE email = @Email",
+            new { Email = email });
 
-        return row?.ToModel();
+        // Si no existe el email, Dapper devuelve null
+        if (row == null)
+        {
+            return null;
+        }
+
+        return ConvertirAUser(row);
     }
 
     public async Task<bool> ExistsByEmailAsync(string email)
     {
         using var connection = CreateConnection();
-        var count = await connection.ExecuteScalarAsync<long>(
-            "SELECT COUNT(*) FROM users WHERE email = @email", new { email });
+        long count = await connection.ExecuteScalarAsync<long>(
+            "SELECT COUNT(*) FROM users WHERE email = @Email",
+            new { Email = email });
         return count > 0;
     }
 
     public async Task CreateAsync(User user)
     {
+        int activo = 0;
+        if (user.Activo)
+        {
+            activo = 1;
+        }
+
         using var connection = CreateConnection();
-        await connection.ExecuteAsync("""
+        await connection.ExecuteAsync(@"
             INSERT INTO users (id, nombre, apellido, email, password_hash, fecha_registro, activo, intentos_fallidos)
-            VALUES (@Id, @Nombre, @Apellido, @Email, @PasswordHash, @FechaRegistro, @Activo, @IntentosFallidos);
-            """,
+            VALUES (@Id, @Nombre, @Apellido, @Email, @PasswordHash, @FechaRegistro, @Activo, @IntentosFallidos);",
             new
             {
                 Id = user.Id.ToString(),
-                user.Nombre,
-                user.Apellido,
-                user.Email,
-                user.PasswordHash,
+                Nombre = user.Nombre,
+                Apellido = user.Apellido,
+                Email = user.Email,
+                PasswordHash = user.PasswordHash,
                 FechaRegistro = user.FechaRegistro.ToString("o"),
-                Activo = user.Activo ? 1 : 0,
-                user.IntentosFallidos
+                Activo = activo,
+                IntentosFallidos = user.IntentosFallidos
             });
     }
 
     public async Task UpdateLoginStateAsync(Guid id, bool activo, int intentosFallidos)
     {
+        int activoNumero = 0;
+        if (activo)
+        {
+            activoNumero = 1;
+        }
+
         using var connection = CreateConnection();
-        await connection.ExecuteAsync("""
+        await connection.ExecuteAsync(@"
             UPDATE users
             SET activo = @Activo, intentos_fallidos = @IntentosFallidos
-            WHERE id = @Id
-            """,
-            new { Id = id.ToString(), Activo = activo ? 1 : 0, IntentosFallidos = intentosFallidos });
+            WHERE id = @Id",
+            new { Id = id.ToString(), Activo = activoNumero, IntentosFallidos = intentosFallidos });
     }
 
-    /// <summary>
-    /// Fila tal como viene de SQLite (todo TEXT/INTEGER). Se convierte a User con tipos reales.
-    /// </summary>
-    private sealed class UserRow
+    /// <summary>Convierte la fila de SQLite (texto y números) a la entidad User.</summary>
+    private static User ConvertirAUser(UserRow row)
     {
-        public string Id { get; set; } = string.Empty;
-        public string Nombre { get; set; } = string.Empty;
-        public string Apellido { get; set; } = string.Empty;
-        public string Email { get; set; } = string.Empty;
-        public string PasswordHash { get; set; } = string.Empty;
-        public string FechaRegistro { get; set; } = string.Empty;
-        public long Activo { get; set; }
-        public long IntentosFallidos { get; set; }
-
-        public User ToModel() => new()
-        {
-            Id = Guid.Parse(Id),
-            Nombre = Nombre,
-            Apellido = Apellido,
-            Email = Email,
-            PasswordHash = PasswordHash,
-            FechaRegistro = DateTime.Parse(FechaRegistro, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
-            Activo = Activo == 1,
-            IntentosFallidos = (int)IntentosFallidos
-        };
+        var user = new User();
+        user.Id = Guid.Parse(row.Id);
+        user.Nombre = row.Nombre;
+        user.Apellido = row.Apellido;
+        user.Email = row.Email;
+        user.PasswordHash = row.PasswordHash;
+        user.FechaRegistro = DateTime.Parse(row.FechaRegistro, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+        user.Activo = row.Activo == 1;
+        user.IntentosFallidos = (int)row.IntentosFallidos;
+        return user;
     }
 }

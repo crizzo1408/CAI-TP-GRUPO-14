@@ -1,6 +1,7 @@
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Users.API.HealthChecks;
 using Users.API.Middleware;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 
 namespace Users.API.Extensions;
 
@@ -20,7 +21,7 @@ public static class MiddlewareExtensions
         app.UseExceptionHandler();
 
         app.UseSwagger();
-        app.UseSwaggerUI(options => options.DocumentTitle = "Users.API - Swagger");
+        app.UseSwaggerUI();
     }
 
     public static void MapAppEndpoints(this WebApplication app)
@@ -28,23 +29,30 @@ public static class MiddlewareExtensions
         app.MapControllers();
 
         // /health: todos los checks
-        app.MapHealthChecks("/health", new HealthCheckOptions
-        {
-            ResponseWriter = HealthCheckResponseWriter.WriteAsync
-        });
+        var opcionesGeneral = new HealthCheckOptions();
+        opcionesGeneral.ResponseWriter = HealthCheckResponseWriter.WriteAsync;
+        app.MapHealthChecks("/health", opcionesGeneral);
 
-        // /health/ready: ¿está listo para atender? (verifica la base)
-        app.MapHealthChecks("/health/ready", new HealthCheckOptions
-        {
-            Predicate = check => check.Tags.Contains("ready"),
-            ResponseWriter = HealthCheckResponseWriter.WriteAsync
-        });
+        // /health/ready: ¿está listo para atender? (solo los checks con la etiqueta "ready")
+        var opcionesReady = new HealthCheckOptions();
+        opcionesReady.Predicate = EsCheckReady;
+        opcionesReady.ResponseWriter = HealthCheckResponseWriter.WriteAsync;
+        app.MapHealthChecks("/health/ready", opcionesReady);
 
-        // /health/live: ¿el proceso está vivo? (no ejecuta checks)
-        app.MapHealthChecks("/health/live", new HealthCheckOptions
-        {
-            Predicate = _ => false,
-            ResponseWriter = HealthCheckResponseWriter.WriteAsync
-        });
+        // /health/live: ¿el proceso está vivo? (no ejecuta ningún check)
+        var opcionesLive = new HealthCheckOptions();
+        opcionesLive.Predicate = NingunCheck;
+        opcionesLive.ResponseWriter = HealthCheckResponseWriter.WriteAsync;
+        app.MapHealthChecks("/health/live", opcionesLive);
+    }
+
+    private static bool EsCheckReady(HealthCheckRegistration check)
+    {
+        return check.Tags.Contains("ready");
+    }
+
+    private static bool NingunCheck(HealthCheckRegistration check)
+    {
+        return false;
     }
 }
