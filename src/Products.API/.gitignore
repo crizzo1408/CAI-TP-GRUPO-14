@@ -1,12 +1,20 @@
-# .gitignore para .NET
+# Archivos generados por .NET
 [Bb]in/
 [Oo]bj/
 [Tt]emp/
-[Ll]oggit /
+
+# Configuracion local de los editores
 .idea/
 .vs/
 *.user
+
+# Bases de datos locales
 app.db
+products.db
+*.db-shm
+*.db-wal
+
+# Archivos de compilacion y registros
 *.pdb
 logs/
 *.log

@@ -1,34 +1,44 @@
 ﻿namespace MiniApi.Models;
 
-public record Product
+public class Product
 {
-    public Guid Id { get; init; }
+    public Guid Id { get; set; }
 
-    public string Nombre { get; init; } = string.Empty;
+    public string Nombre { get; set; } = string.Empty;
 
-    public string? Descripcion { get; init; }
+    public string? Descripcion { get; set; }
 
-    public decimal Precio { get; init; }
+    public decimal Precio { get; set; }
 
-    public int Stock { get; init; }
+    public int Stock { get; set; }
 
-    public string Categoria { get; init; } = string.Empty;
+    public string Categoria { get; set; } = string.Empty;
 
-    public DateTime FechaCreacion { get; init; }
+    public DateTime FechaCreacion { get; set; }
 }
 
-public record CreateProductRequest(
-    string Nombre,
-    string? Descripcion,
-    decimal Precio,
-    int Stock,
-    string Categoria
-);
+public class CreateProductRequest
+{
+    public string Nombre { get; set; } = string.Empty;
 
-public record UpdateProductRequest(
-    string Nombre,
-    string? Descripcion,
-    decimal Precio,
-    int Stock,
-    string Categoria
-);
+    public string? Descripcion { get; set; }
+
+    public decimal Precio { get; set; }
+
+    public int Stock { get; set; }
+
+    public string Categoria { get; set; } = string.Empty;
+}
+
+public class UpdateProductRequest
+{
+    public string Nombre { get; set; } = string.Empty;
+
+    public string? Descripcion { get; set; }
+
+    public decimal Precio { get; set; }
+
+    public int Stock { get; set; }
+
+    public string Categoria { get; set; } = string.Empty;
+}

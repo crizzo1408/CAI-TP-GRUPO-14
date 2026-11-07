@@ -1,74 +1,136 @@
 ﻿using System.Text;
 using System.Text.Json;
 
-namespace MiniApi.Middleware
+namespace MiniApi.Middleware;
+
+public class AuditMiddleware
 {
-    public class AuditMiddleware
+    private readonly RequestDelegate _next;
+    private readonly ILogger<AuditMiddleware> _logger;
+
+    public AuditMiddleware(
+        RequestDelegate next,
+        ILogger<AuditMiddleware> logger)
     {
-        private readonly RequestDelegate _next;
-        private readonly ILogger<AuditMiddleware> _logger;
+        _next = next;
+        _logger = logger;
+    }
 
-        // Solo auditar operaciones de escritura
-        private static readonly HashSet<string> AuditMethods =
-            new(StringComparer.OrdinalIgnoreCase) { "POST", "PUT", "DELETE" };
+    public async Task InvokeAsync(HttpContext context)
+    {
+        var shouldAudit =
+            ShouldAuditMethod(context.Request.Method);
 
-        public AuditMiddleware(RequestDelegate next, ILogger<AuditMiddleware> logger)
+        if (shouldAudit == false)
         {
-            _next = next;
-            _logger = logger;
+            await _next(context);
+            return;
         }
 
-        public async Task InvokeAsync(HttpContext context)
+        context.Request.EnableBuffering();
+
+        var requestBody =
+            await ReadBodyAsync(context.Request.Body);
+
+        context.Request.Body.Position = 0;
+
+        var originalResponseBody = context.Response.Body;
+
+        await using var responseBuffer = new MemoryStream();
+
+        context.Response.Body = responseBuffer;
+
+        try
         {
-            // Si no es una operación de escritura, pasar directo
-            if (!AuditMethods.Contains(context.Request.Method))
+            await _next(context);
+
+            responseBuffer.Position = 0;
+
+            var responseBody =
+                await ReadBodyAsync(responseBuffer);
+
+            responseBuffer.Position = 0;
+
+            await responseBuffer.CopyToAsync(
+                originalResponseBody);
+
+            var endpoint = context.Request.Path.Value;
+
+            if (endpoint == null)
             {
-                await _next(context);
-                return;
+                endpoint = string.Empty;
             }
 
-            // ── Capturar Request body ──────────────────────────────────────────
-            context.Request.EnableBuffering(); // permite releer el stream
-            var requestBody = await ReadBodyAsync(context.Request.Body);
-            context.Request.Body.Position = 0; // rebobinar para que el endpoint lo lea
-
-            // ── Capturar Response body ─────────────────────────────────────────
-            var originalResponseBody = context.Response.Body;
-            using var memStream = new MemoryStream();
-            context.Response.Body = memStream;
-
-            await _next(context); // ejecutar el endpoint
-
-            memStream.Position = 0;
-            var responseBody = await new StreamReader(memStream).ReadToEndAsync();
-
-            // Copiar la respuesta de vuelta al stream original
-            memStream.Position = 0;
-            await memStream.CopyToAsync(originalResponseBody);
-            context.Response.Body = originalResponseBody;
-
-            // ── Escribir entrada de auditoría ──────────────────────────────────
             _logger.LogInformation(
-                "AUDIT {@Method} {@Path} {@StatusCode} {@RequestBody} {@ResponseBody}",
+                "AUDIT {HttpMethod} {Endpoint} {StatusCode} " +
+                "{@RequestBody} {@ResponseBody}",
                 context.Request.Method,
-                context.Request.Path.Value,
+                endpoint,
                 context.Response.StatusCode,
                 TryParseJson(requestBody),
                 TryParseJson(responseBody));
         }
-
-        private static async Task<string> ReadBodyAsync(Stream body)
+        finally
         {
-            using var reader = new StreamReader(body, Encoding.UTF8, leaveOpen: true);
-            return await reader.ReadToEndAsync();
+            context.Response.Body = originalResponseBody;
+        }
+    }
+
+    private static bool ShouldAuditMethod(string method)
+    {
+        if (method.Equals(
+            "POST",
+            StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        else if (method.Equals(
+            "PUT",
+            StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        else if (method.Equals(
+            "DELETE",
+            StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
         }
 
-        // Deserializar para que Serilog lo guarde como objeto JSON (no como string)
-        private static object? TryParseJson(string raw)
+        return false;
+    }
+
+    private static async Task<string> ReadBodyAsync(
+        Stream body)
+    {
+        using var reader = new StreamReader(
+            body,
+            Encoding.UTF8,
+            detectEncodingFromByteOrderMarks: false,
+            leaveOpen: true);
+
+        var content = await reader.ReadToEndAsync();
+
+        return content;
+    }
+
+    private static object? TryParseJson(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
         {
-            if (string.IsNullOrWhiteSpace(raw)) return null;
-            try { return JsonSerializer.Deserialize<object>(raw); }
-            catch { return raw; }
+            return null;
+        }
+
+        try
+        {
+            var parsedContent =
+                JsonSerializer.Deserialize<object>(raw);
+
+            return parsedContent;
+        }
+        catch (JsonException)
+        {
+            return raw;
         }
     }
 }

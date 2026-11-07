@@ -1,26 +1,47 @@
-﻿using MiniApi.Data;
+﻿using MiniApi.Clients;
+using MiniApi.Data;
+using MiniApi.ExceptionHandlers;
 using MiniApi.HealthChecks;
 
-namespace MiniApi.Extensions
+namespace MiniApi.Extensions;
+
+public static class ServicesExtensions
 {
-    public static class ServicesExtensions
+    public static void AddAppServices(
+        this IServiceCollection services)
     {
-        public static void AddAppServices(this IServiceCollection services)
-        {
-            services.AddSingleton<DatabaseInitializer>();
-            services.AddScoped<ItemRepository>();
-            services.AddEndpointsApiExplorer();
-            services.AddSwaggerGen();
+        services.AddSingleton<DatabaseInitializer>();
 
-            services.AddHealthChecks()
-                .AddCheck<SqliteHealthCheck>("sqlite-db", tags: ["database"])
-                .AddCheck<ApiStatusCheck>("api-status", tags: ["api"]);
+        services.AddScoped<ItemRepository>();
 
-            services.AddHealthChecksUI(setup =>
-            {
-                setup.SetEvaluationTimeInSeconds(600);
-                setup.AddHealthCheckEndpoint("MiApi", "/health");
-            }).AddInMemoryStorage();
-        }
+        services.AddHttpContextAccessor();
+
+        services.AddHttpClient<OrdersClient>();
+
+        services.AddEndpointsApiExplorer();
+
+        services.AddSwaggerGen();
+
+        services.AddExceptionHandler<
+            NotFoundExceptionHandler>();
+
+        services.AddExceptionHandler<
+            ValidationExceptionHandler>();
+
+        services.AddExceptionHandler<
+            BusinessRuleExceptionHandler>();
+
+        services.AddExceptionHandler<
+            GlobalExceptionHandler>();
+
+        services.AddProblemDetails();
+
+        services.AddHealthChecks()
+            .AddCheck<SqliteHealthCheck>(
+                "sqlite-db",
+                tags: new string[] { "database" })
+            .AddCheck<ApiStatusCheck>(
+                "api-status",
+                tags: new string[] { "api" });
     }
 }
