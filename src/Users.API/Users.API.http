@@ -1,0 +1,122 @@
+﻿@UsersApi_HostAddress = http://localhost:5002
+# ===================================================================
+#  Users.API - Casos de prueba
+#  Cómo usarlo: ejecutar Users.API (perfil http) y hacer clic en
+#  "Enviar solicitud" (Send request) arriba de cada request.
+#  La respuesta aparece en el panel de la derecha.
+#
+#  Nota: la base guarda los datos entre ejecuciones. Para repetir todo
+#  desde cero, cerrar la app y borrar el archivo users.db.
+# ===================================================================
+
+# REGISTER 1. Registro correcto → 201
+POST {{UsersApi_HostAddress}}/api/users/register
+Content-Type: application/json
+
+{
+  "nombre": "Ana",
+  "apellido": "López",
+  "email": "ana@email.com",
+  "password": "Clave1234"
+}
+
+### REGISTER 2. Email ya registrado → 409 USR-001
+POST {{UsersApi_HostAddress}}/api/users/register
+Content-Type: application/json
+
+{
+  "nombre": "Ana",
+  "apellido": "López",
+  "email": "ana@email.com",
+  "password": "Clave1234"
+}
+
+### REGISTER 3. Datos inválidos → 400 USR-002 (lista todos los problemas separados por ;)
+POST {{UsersApi_HostAddress}}/api/users/register
+Content-Type: application/json
+
+{
+  "nombre": "",
+  "apellido": "G",
+  "email": "mal",
+  "password": "123"
+}
+
+### REGISTER 4. Body vacío → 400 USR-002
+POST {{UsersApi_HostAddress}}/api/users/register
+Content-Type: application/json
+
+### LOGIN 5. Login correcto → 200 (y resetea los intentos fallidos)
+POST {{UsersApi_HostAddress}}/api/users/login
+Content-Type: application/json
+
+{
+  "email": "ana@email.com",
+  "password": "Clave1234"
+}
+
+### LOGIN 6. Falta la contraseña → 400 USR-002
+POST {{UsersApi_HostAddress}}/api/users/login
+Content-Type: application/json
+
+{
+  "email": "ana@email.com"
+}
+
+### LOGIN 7. Email inexistente → 401 USR-003 (no revela si el email existe)
+POST {{UsersApi_HostAddress}}/api/users/login
+Content-Type: application/json
+
+{
+  "email": "nadie@email.com",
+  "password": "loquesea1"
+}
+
+### LOGIN 8. Contraseña incorrecta → 1.ª y 2.ª vez: 401 USR-003 / 3.ª vez: 403 USR-004 (se bloquea)
+#    Ejecutar este request 3 veces seguidas.
+POST {{UsersApi_HostAddress}}/api/users/login
+Content-Type: application/json
+
+{
+  "email": "ana@email.com",
+  "password": "incorrecta"
+}
+
+### LOGIN 9. Contraseña correcta pero cuenta bloqueada → 403 USR-004
+POST {{UsersApi_HostAddress}}/api/users/login
+Content-Type: application/json
+
+{
+  "email": "ana@email.com",
+  "password": "Clave1234"
+}
+
+### LOGIN 10. Usuario bloqueado manualmente por fraude → 403 USR-005
+#     Usuario de prueba que se crea solo en Development.
+POST {{UsersApi_HostAddress}}/api/users/login
+Content-Type: application/json
+
+{
+  "email": "bloqueado@email.com",
+  "password": "Password123!"
+}
+
+### CORRELATION ID 11. Enviar un X-Correlation-Id propio → la respuesta lo devuelve igual
+#     (y aparece en los logs con ese mismo valor)
+POST {{UsersApi_HostAddress}}/api/users/login
+Content-Type: application/json
+X-Correlation-Id: prueba-demo-123
+
+{
+  "email": "nadie@email.com",
+  "password": "loquesea1"
+}
+
+### HEALTH 12. Estado general → Healthy
+GET {{UsersApi_HostAddress}}/health
+
+### HEALTH 13. Listo para atender (verifica SQLite) → Healthy
+GET {{UsersApi_HostAddress}}/health/ready
+
+### HEALTH 14. Proceso vivo → Healthy
+GET {{UsersApi_HostAddress}}/health/live
