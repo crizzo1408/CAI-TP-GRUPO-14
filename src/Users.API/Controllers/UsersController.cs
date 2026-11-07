@@ -14,8 +14,15 @@ namespace Users.API.Controllers;
 [ApiController]
 [Route("api/users")]
 [Produces("application/json")]
-public class UsersController(IUserService userService) : ControllerBase
+public class UsersController : ControllerBase
 {
+    private readonly IUserService _userService;
+
+    public UsersController(IUserService userService)
+    {
+        _userService = userService;
+    }
+
     /// <summary>
     /// Registra un nuevo usuario.
     /// </summary>
@@ -38,7 +45,7 @@ public class UsersController(IUserService userService) : ControllerBase
     [SwaggerErrorExample(StatusCodes.Status500InternalServerError, ErrorCodes.USR_006, ErrorMessages.USR_006)]
     public async Task<ActionResult<UserResponse>> Register([FromBody] RegisterUserRequest request)
     {
-        var user = await userService.RegisterAsync(request);
+        UserResponse user = await _userService.RegisterAsync(request);
         return StatusCode(StatusCodes.Status201Created, user);
     }
 
@@ -69,7 +76,7 @@ public class UsersController(IUserService userService) : ControllerBase
     [SwaggerErrorExample(StatusCodes.Status500InternalServerError, ErrorCodes.USR_006, ErrorMessages.USR_006)]
     public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
     {
-        var user = await userService.LoginAsync(request);
+        LoginResponse user = await _userService.LoginAsync(request);
         return Ok(user);
     }
 }
