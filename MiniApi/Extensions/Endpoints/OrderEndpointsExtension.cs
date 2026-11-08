@@ -27,7 +27,7 @@ namespace MiniApi.Extensions.Endpoints
       
         private const string UsersApiUrl = "http://localhost:5002";
         private const string ProductsApiUrl = "http://localhost:5001";
-        private const string MockApiUrl = "http://localhost:5000/mock";
+        //private const string MockApiUrl = "http://localhost:5000/mock";// Se usó para el mock de pruebas
 
         private const string CorrelationHeader = "X-Correlation-Id";
 
