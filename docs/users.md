@@ -43,7 +43,7 @@ Registro e inicio de sesión de usuarios, con bloqueo de la cuenta tras 3 intent
 - Para distinguir USR-004 de USR-005 se usa el contador: inactivo con 3+ intentos = bloqueo por intentos; inactivo con menos de 3 = bloqueo manual.
 - Un email inexistente devuelve USR-003 (no 404) para no revelar qué emails están registrados.
 
-## Extensión: GET /api/users/{id} (a confirmar con el docente)
+## Extensión: GET /api/users/{id} (decisión de diseño del grupo)
 
 La consigna solo define register y login, pero Orders (ORD-003) y Notifications (NTF-001)
 necesitan validar que un usuario exista en Users. Por eso se agregó, acordado en el grupo:
@@ -57,8 +57,9 @@ GET http://localhost:5002/api/users/{id}
 
 - Nunca devuelve la contraseña.
 - Si el usuario está bloqueado, se devuelve igual con `"activo": false`: cada servicio decide si lo acepta.
-- USR-007 es un código nuevo (sigue la numeración del catálogo). Tanto el endpoint como el código
-  son una propuesta que hay que confirmar con el docente.
+- USR-007 es un código nuevo, que sigue la numeración del catálogo. Se creó porque ninguno de los
+  códigos existentes describe "usuario no encontrado": USR-002 es datos inválidos (400), USR-003 es
+  credenciales incorrectas (401) y USR-006 es error interno (500).
 
 ## Usuario de prueba (solo Development)
 

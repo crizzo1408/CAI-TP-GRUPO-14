@@ -21,7 +21,8 @@ public static class ErrorCodes
     /// <summary>
     /// 404 - Usuario no encontrado (GET /api/users/{id}).
     /// EXTENSIÓN: no está en la consigna; se agregó para que Orders y Notifications
-    /// puedan validar que un usuario exista. A confirmar con el docente.
+    /// puedan validar que un usuario exista. Decisión de diseño del grupo: el catálogo
+    /// no tenía un código 404 para Users, así que se sigue la numeración.
     /// </summary>
     public const string USR_007 = "USR-007";
 }
