@@ -15,10 +15,10 @@ public static class MiddlewareExtensions
     {
         app.UseMiddleware<CorrelationIdMiddleware>();
 
-        app.UseExceptionHandler();
-
         app.UseSerilogRequestLogging(
             ConfigureRequestLogging);
+
+        app.UseExceptionHandler();
 
         app.UseMiddleware<AuditMiddleware>();
 

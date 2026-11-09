@@ -1,0 +1,21 @@
+@Notifications_API_HostAddress = http://localhost:5005
+@UserId = 00000000-0000-0000-0000-000000000000
+
+GET {{Notifications_API_HostAddress}}/health
+Accept: application/json
+
+###
+
+POST {{Notifications_API_HostAddress}}/api/notifications/send
+Content-Type: application/json
+
+{
+  "usuarioId": "{{UserId}}",
+  "mensaje": "Tu pedido fue confirmado.",
+  "tipo": "Email"
+}
+
+###
+
+GET {{Notifications_API_HostAddress}}/api/notifications/{{UserId}}
+Accept: application/json

@@ -79,4 +79,28 @@ public class UsersController : ControllerBase
         LoginResponse user = await _userService.LoginAsync(request);
         return Ok(user);
     }
+
+    /// <summary>
+    /// Obtiene un usuario por su id.
+    /// </summary>
+    /// <remarks>
+    /// EXTENSIÓN (no está en la consigna): lo usan Orders (ORD-003) y Notifications (NTF-001)
+    /// para validar que el usuario exista. Si el usuario está bloqueado se devuelve igual,
+    /// con "activo": false. Nunca devuelve la contraseña.
+    /// </remarks>
+    /// <param name="id">Id del usuario (Guid).</param>
+    /// <response code="200">Usuario encontrado.</response>
+    /// <response code="404">USR-007: el usuario no existe (o el id no es un Guid válido).</response>
+    /// <response code="500">USR-006: error interno.</response>
+    [HttpGet("{id}")]
+    [ProducesResponseType(typeof(UserResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    [SwaggerErrorExample(StatusCodes.Status404NotFound, ErrorCodes.USR_007, ErrorMessages.USR_007)]
+    [SwaggerErrorExample(StatusCodes.Status500InternalServerError, ErrorCodes.USR_006, ErrorMessages.USR_006)]
+    public async Task<ActionResult<UserResponse>> GetById(string id)
+    {
+        UserResponse user = await _userService.GetByIdAsync(id);
+        return Ok(user);
+    }
 }

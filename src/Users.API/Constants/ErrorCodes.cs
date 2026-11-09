@@ -18,6 +18,13 @@ public static class ErrorCodes
     public const string USR_005 = "USR-005";
     /// <summary>500 - Error interno al procesar el usuario.</summary>
     public const string USR_006 = "USR-006";
+    /// <summary>
+    /// 404 - Usuario no encontrado (GET /api/users/{id}).
+    /// EXTENSIÓN: no está en la consigna; se agregó para que Orders y Notifications
+    /// puedan validar que un usuario exista. Decisión de diseño del grupo: el catálogo
+    /// no tenía un código 404 para Users, así que se sigue la numeración.
+    /// </summary>
+    public const string USR_007 = "USR-007";
 }
 
 /// <summary>
@@ -31,4 +38,5 @@ public static class ErrorMessages
     public const string USR_004 = "Su cuenta fue bloqueada por superar el máximo de intentos fallidos. Contacte a soporte.";
     public const string USR_005 = "Su cuenta fue suspendida por razones de seguridad. Contacte a soporte.";
     public const string USR_006 = "Error interno al procesar el usuario.";
+    public const string USR_007 = "Usuario no encontrado.";
 }

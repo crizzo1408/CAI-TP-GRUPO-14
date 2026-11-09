@@ -134,6 +134,36 @@ public class UserService : IUserService
     }
 
     /// <summary>
+    /// Busca un usuario por id. Lo usan Orders (ORD-003) y Notifications (NTF-001)
+    /// para validar que el usuario exista. Si está bloqueado se devuelve igual,
+    /// con Activo = false: cada servicio decide qué hacer.
+    /// </summary>
+    public async Task<UserResponse> GetByIdAsync(string id)
+    {
+        // Un id que no es un Guid válido no puede existir: se responde 404 igual
+        Guid userId;
+        if (!Guid.TryParse(id, out userId))
+        {
+            throw new NotFoundException(ErrorCodes.USR_007, ErrorMessages.USR_007);
+        }
+
+        User user = await _repository.GetByIdAsync(userId);
+        if (user == null)
+        {
+            throw new NotFoundException(ErrorCodes.USR_007, ErrorMessages.USR_007);
+        }
+
+        var response = new UserResponse();
+        response.Id = user.Id;
+        response.Nombre = user.Nombre;
+        response.Apellido = user.Apellido;
+        response.Email = user.Email;
+        response.FechaRegistro = user.FechaRegistro;
+        response.Activo = user.Activo;
+        return response;
+    }
+
+    /// <summary>
     /// Un usuario inactivo puede estar bloqueado por dos motivos:
     /// - acumuló 3 o más intentos fallidos → USR-004
     /// - lo bloquearon manualmente (fraude) sin intentos fallidos → USR-005
