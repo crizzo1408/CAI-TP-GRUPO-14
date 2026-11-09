@@ -1,0 +1,158 @@
+﻿@CartApi_HostAddress = http://localhost:5004
+@userId = a1b2c3d4-0000-0000-0000-111122223333
+@notebookId = 3fa85f64-5717-4562-b3fc-2c963f66afa6
+@auricularesId = aaaabbbb-cccc-dddd-eeee-ffff00001111
+@productoInexistenteId = 99999999-9999-9999-9999-999999999999
+@productoQueFallaId = 00000000-0000-0000-0000-000000000500
+# ===================================================================
+#  Cart.API - Casos de prueba
+#  Cómo usarlo: ejecutar Cart.API y Products.API (perfil http) y hacer
+#  clic en "Enviar solicitud" (Send request) arriba de cada request.
+#  La respuesta aparece en el panel de la derecha.
+#
+#  Los ids de productos de arriba son los del Products de prueba
+#  (carpeta _local/FakeProducts.API): Notebook stock 10, Auriculares
+#  stock 3. Con el Products real, reemplazarlos por ids que existan
+#  (se ven con GET /api/products en el Swagger de Products).
+#  "productoQueFallaId" solo funciona con el Products de prueba:
+#  simula que Products responde 500.
+#
+#  Los requests están pensados para ejecutarse EN ORDEN.
+#  Para repetir todo desde cero, cerrar la app y borrar cart.db,
+#  o cambiar el userId de arriba por otro Guid.
+# ===================================================================
+
+# GET 1. Carrito que todavía no existe → 404 CRT-001
+GET {{CartApi_HostAddress}}/api/cart/{{userId}}
+
+### POST 2. Agregar producto (crea el carrito) → 200, notebook x2
+POST {{CartApi_HostAddress}}/api/cart/{{userId}}/items
+Content-Type: application/json
+
+{
+  "productoId": "{{notebookId}}",
+  "cantidad": 2
+}
+
+### POST 3. Agregar el mismo producto otra vez → 200, notebook x4 (suma)
+POST {{CartApi_HostAddress}}/api/cart/{{userId}}/items
+Content-Type: application/json
+
+{
+  "productoId": "{{notebookId}}",
+  "cantidad": 2
+}
+
+### POST 4. Stock insuficiente → 422 CRT-003 ("Disponible: 3, solicitado: 5")
+POST {{CartApi_HostAddress}}/api/cart/{{userId}}/items
+Content-Type: application/json
+
+{
+  "productoId": "{{auricularesId}}",
+  "cantidad": 5
+}
+
+### POST 5. Cantidad inválida → 400 CRT-004
+POST {{CartApi_HostAddress}}/api/cart/{{userId}}/items
+Content-Type: application/json
+
+{
+  "productoId": "{{auricularesId}}",
+  "cantidad": 0
+}
+
+### POST 6. Falta el productoId → 400 CRT-004
+POST {{CartApi_HostAddress}}/api/cart/{{userId}}/items
+Content-Type: application/json
+
+{
+  "cantidad": 1
+}
+
+### POST 7. Producto que no existe en Products → 404 CRT-002
+POST {{CartApi_HostAddress}}/api/cart/{{userId}}/items
+Content-Type: application/json
+
+{
+  "productoId": "{{productoInexistenteId}}",
+  "cantidad": 1
+}
+
+### POST 8. Products responde con error → 500 CRT-005 (solo con el Products de prueba)
+POST {{CartApi_HostAddress}}/api/cart/{{userId}}/items
+Content-Type: application/json
+
+{
+  "productoId": "{{productoQueFallaId}}",
+  "cantidad": 1
+}
+
+### GET 9. Ver el carrito → 200, con la notebook x4
+GET {{CartApi_HostAddress}}/api/cart/{{userId}}
+
+### PUT 10. Cambiar la cantidad → 200, notebook x7 (reemplaza, no suma)
+PUT {{CartApi_HostAddress}}/api/cart/{{userId}}/items/{{notebookId}}
+Content-Type: application/json
+
+{
+  "cantidad": 7
+}
+
+### PUT 11. Más que el stock → 422 CRT-003 (la notebook tiene stock 10)
+PUT {{CartApi_HostAddress}}/api/cart/{{userId}}/items/{{notebookId}}
+Content-Type: application/json
+
+{
+  "cantidad": 50
+}
+
+### PUT 12. Producto que no está en el carrito → 404 CRT-001
+PUT {{CartApi_HostAddress}}/api/cart/{{userId}}/items/{{auricularesId}}
+Content-Type: application/json
+
+{
+  "cantidad": 1
+}
+
+### DELETE 13. Quitar un producto → 204
+DELETE {{CartApi_HostAddress}}/api/cart/{{userId}}/items/{{notebookId}}
+
+### DELETE 14. Quitar el mismo producto otra vez → 404 CRT-001
+DELETE {{CartApi_HostAddress}}/api/cart/{{userId}}/items/{{notebookId}}
+
+### DELETE 15. Vaciar el carrito → 204
+DELETE {{CartApi_HostAddress}}/api/cart/{{userId}}
+
+### GET 16. Carrito vacío (sigue existiendo) → 200, "items": []
+GET {{CartApi_HostAddress}}/api/cart/{{userId}}
+
+### GET 17. Usuario sin carrito → 404 CRT-001
+GET {{CartApi_HostAddress}}/api/cart/99999999-0000-0000-0000-000000000000
+
+### CORRELATION ID 18. Enviar un X-Correlation-Id propio → 404 CRT-002 con "correlationId": "prueba-demo-456"
+#    El 404 es a propósito (producto inexistente): así Products también registra el error.
+#    Lo que se prueba es que Cart usa el id recibido y lo reenvía a Products:
+#    "prueba-demo-456" aparece en la respuesta y en los logs de los dos servicios.
+POST {{CartApi_HostAddress}}/api/cart/{{userId}}/items
+Content-Type: application/json
+X-Correlation-Id: prueba-demo-456
+
+{
+  "productoId": "{{productoInexistenteId}}",
+  "cantidad": 1
+}
+
+### HEALTH 19. ¿Cómo está el servicio en general? → "status": "Healthy"
+#    Revisa todo: la base de datos y la conexión con Products.
+#    "Healthy" = todo funciona bien.
+GET {{CartApi_HostAddress}}/health
+
+### HEALTH 20. ¿Está listo para recibir pedidos? → "Healthy" (o "Degraded" si Products está apagado)
+#    Revisa que la base de datos funcione y que Products responda.
+#    "Degraded" = funciona a medias: puede mostrar y vaciar carritos,
+#    pero no puede agregar productos porque no puede consultar el stock.
+GET {{CartApi_HostAddress}}/health/ready
+
+### HEALTH 21. ¿El programa está encendido? → "status": "Healthy"
+#    No revisa nada más: solo confirma que Cart está corriendo.
+GET {{CartApi_HostAddress}}/health/live
