@@ -63,21 +63,37 @@ public class UserRepository : IUserRepository
         return ConvertirAUser(row);
     }
 
+    public async Task<User> GetByIdAsync(Guid id)
+    {
+        using var connection = CreateConnection();
+        UserRow row = await connection.QuerySingleOrDefaultAsync<UserRow>(@"
+            SELECT id                AS Id,
+                   nombre            AS Nombre,
+                   apellido          AS Apellido,
+                   email             AS Email,
+                   password_hash     AS PasswordHash,
+                   fecha_registro    AS FechaRegistro,
+                   activo            AS Activo,
+                   intentos_fallidos AS IntentosFallidos
+            FROM users
+            WHERE id = @Id",
+            new { Id = id.ToString() });
+
+        // Si no existe el id, Dapper devuelve null
+        if (row == null)
+        {
+            return null;
+        }
+
+        return ConvertirAUser(row);
+    }
+
     public async Task<bool> ExistsByEmailAsync(string email)
     {
         using var connection = CreateConnection();
         long count = await connection.ExecuteScalarAsync<long>(
             "SELECT COUNT(*) FROM users WHERE email = @Email",
             new { Email = email });
-        return count > 0;
-    }
-
-    public async Task<bool> ExistsByIdAsync(Guid id)
-    {
-        using var connection = CreateConnection();
-        long count = await connection.ExecuteScalarAsync<long>(
-            "SELECT COUNT(*) FROM users WHERE id = @Id",
-            new { Id = id.ToString() });
         return count > 0;
     }
 
