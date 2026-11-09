@@ -9,7 +9,7 @@ namespace MiniApi.Extensions.Endpoints
 {
     public static class OrdersEndpointsExtension
     {
-        private static readonly bool SimularUsers = true;
+        private static readonly bool SimularUsers = false;
 
         private const string UsersApiUrl = "http://localhost:5002";
         private const string ProductsApiUrl = "http://localhost:5001";
@@ -54,10 +54,7 @@ namespace MiniApi.Extensions.Endpoints
                 .Produces<ApiErrorResponse>(StatusCodes.Status500InternalServerError);
 
             
-            if (SimularUsers)
-            {
-                app.MapOrdersMockEndpoints();
-            }
+           
         }
 
         // ───────── GET /api/orders ─────────
