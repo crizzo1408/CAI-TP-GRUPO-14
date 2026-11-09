@@ -182,4 +182,9 @@ public class UserService : IUserService
     {
         return email.Trim().ToLowerInvariant();
     }
+
+    public Task<bool> ExistsByIdAsync(Guid id)
+    {
+        return _repository.ExistsByIdAsync(id);
+    }
 }
