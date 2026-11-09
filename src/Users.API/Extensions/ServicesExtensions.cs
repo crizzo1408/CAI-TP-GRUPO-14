@@ -30,6 +30,7 @@ public static class ServicesExtensions
         services.AddExceptionHandler<UnauthorizedExceptionHandler>();
         services.AddExceptionHandler<ForbiddenExceptionHandler>();
         services.AddExceptionHandler<ConflictExceptionHandler>();
+        services.AddExceptionHandler<NotFoundExceptionHandler>();
         services.AddExceptionHandler<GlobalExceptionHandler>();
         services.AddProblemDetails();
 
