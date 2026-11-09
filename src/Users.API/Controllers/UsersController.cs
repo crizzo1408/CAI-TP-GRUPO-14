@@ -79,4 +79,19 @@ public class UsersController : ControllerBase
         LoginResponse user = await _userService.LoginAsync(request);
         return Ok(user);
     }
+
+    /// <summary>Indica si existe un usuario con el identificador recibido.</summary>
+    /// <remarks>Endpoint de integración utilizado por Notifications.API.</remarks>
+    /// <param name="id">Identificador del usuario.</param>
+    /// <response code="200">Devuelve exists: true o false.</response>
+    /// <response code="500">USR-006: error interno.</response>
+    [HttpGet("{id:guid}/exists")]
+    [ProducesResponseType(typeof(UserExistsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    [SwaggerErrorExample(StatusCodes.Status500InternalServerError, ErrorCodes.USR_006, ErrorMessages.USR_006)]
+    public async Task<ActionResult<UserExistsResponse>> Exists(Guid id)
+    {
+        bool exists = await _userService.ExistsByIdAsync(id);
+        return Ok(new UserExistsResponse { Exists = exists });
+    }
 }
