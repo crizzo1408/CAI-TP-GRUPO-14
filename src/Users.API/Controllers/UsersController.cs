@@ -80,18 +80,27 @@ public class UsersController : ControllerBase
         return Ok(user);
     }
 
-    /// <summary>Indica si existe un usuario con el identificador recibido.</summary>
-    /// <remarks>Endpoint de integración utilizado por Notifications.API.</remarks>
-    /// <param name="id">Identificador del usuario.</param>
-    /// <response code="200">Devuelve exists: true o false.</response>
+    /// <summary>
+    /// Obtiene un usuario por su id.
+    /// </summary>
+    /// <remarks>
+    /// EXTENSIÓN (no está en la consigna): lo usan Orders (ORD-003) y Notifications (NTF-001)
+    /// para validar que el usuario exista. Si el usuario está bloqueado se devuelve igual,
+    /// con "activo": false. Nunca devuelve la contraseña.
+    /// </remarks>
+    /// <param name="id">Id del usuario (Guid).</param>
+    /// <response code="200">Usuario encontrado.</response>
+    /// <response code="404">USR-007: el usuario no existe (o el id no es un Guid válido).</response>
     /// <response code="500">USR-006: error interno.</response>
-    [HttpGet("{id:guid}/exists")]
-    [ProducesResponseType(typeof(UserExistsResponse), StatusCodes.Status200OK)]
+    [HttpGet("{id}")]
+    [ProducesResponseType(typeof(UserResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    [SwaggerErrorExample(StatusCodes.Status404NotFound, ErrorCodes.USR_007, ErrorMessages.USR_007)]
     [SwaggerErrorExample(StatusCodes.Status500InternalServerError, ErrorCodes.USR_006, ErrorMessages.USR_006)]
-    public async Task<ActionResult<UserExistsResponse>> Exists(Guid id)
+    public async Task<ActionResult<UserResponse>> GetById(string id)
     {
-        bool exists = await _userService.ExistsByIdAsync(id);
-        return Ok(new UserExistsResponse { Exists = exists });
+        UserResponse user = await _userService.GetByIdAsync(id);
+        return Ok(user);
     }
 }
