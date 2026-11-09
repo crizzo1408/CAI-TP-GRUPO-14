@@ -22,20 +22,29 @@ namespace MiniApi.Data
             using var connection = new SqliteConnection(connectionString);
             connection.Open();
 
-            // ALUMNO: en caso de tener que agregar otra tabla es duplicar este comando
+            // Orders (Guid y fechas se guardan como TEXT; SQLite no tiene tipo Guid ni DateTime)
             connection.Execute("""
-            CREATE TABLE IF NOT EXISTS items (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                name        TEXT    NOT NULL,
-                description TEXT,
-                price       REAL    NOT NULL DEFAULT 0,
-                stock       INTEGER NOT NULL DEFAULT 0,
-                created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-                updated_at  TEXT
+            CREATE TABLE IF NOT EXISTS orders (
+                id                  TEXT PRIMARY KEY,
+                usuario_id          TEXT NOT NULL,
+                total               REAL NOT NULL DEFAULT 0,
+                estado              TEXT NOT NULL DEFAULT 'Pendiente',
+                fecha_creacion      TEXT NOT NULL,
+                fecha_actualizacion TEXT
             );
         """);
 
-
+            // Items de cada orden (relación 1 a N con orders)
+            connection.Execute("""
+            CREATE TABLE IF NOT EXISTS order_items (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                order_id        TEXT    NOT NULL,
+                producto_id     TEXT    NOT NULL,
+                cantidad        INTEGER NOT NULL,
+                precio_unitario REAL    NOT NULL,
+                FOREIGN KEY (order_id) REFERENCES orders(id)
+            );
+        """);
 
             _logger.LogInformation("SQLite inicializado correctamente → {db}", connectionString);
         }
