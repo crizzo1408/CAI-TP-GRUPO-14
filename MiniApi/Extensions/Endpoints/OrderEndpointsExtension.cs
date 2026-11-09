@@ -1,33 +1,18 @@
-﻿using MiniApi.Data;
+﻿using System.Net;
+using System.Net.Http.Json;
+using MiniApi.Data;
+using MiniApi.ExceptionHandlers;
+using MiniApi.Exceptions;
 using MiniApi.Models;
-using System;
-using System.Collections.Generic;
-using System.Net;
-using System.Text;
 
 namespace MiniApi.Extensions.Endpoints
 {
-    // Catálogo de errores de Orders
-    public static class OrderErrorCodes
-    {
-        public const string NotFound = "ORD-001";
-        public const string InvalidData = "ORD-002";
-        public const string UserNotFound = "ORD-003";
-        public const string ProductNotFound = "ORD-004";
-        public const string InsufficientStock = "ORD-005";
-        public const string InvalidTransition = "ORD-006";
-        public const string Internal = "ORD-007";
-    }
-
     public static class OrdersEndpointsExtension
     {
-        
-        private static readonly bool UsarServiciosSimulados = true;
+        private static readonly bool SimularUsers = true;
 
-      
         private const string UsersApiUrl = "http://localhost:5002";
         private const string ProductsApiUrl = "http://localhost:5001";
-        //private const string MockApiUrl = "http://localhost:5000/mock";// Se usó para el mock de pruebas
 
         private const string CorrelationHeader = "X-Correlation-Id";
 
@@ -38,224 +23,198 @@ namespace MiniApi.Extensions.Endpoints
                 .WithSummary("Listar órdenes")
                 .WithDescription("Filtro opcional ?usuarioId=. Si el usuarioId no es un GUID válido se devuelve una lista vacía. Errores: ORD-007 (500).")
                 .Produces<List<Order>>(StatusCodes.Status200OK)
-                .ProducesProblem(StatusCodes.Status500InternalServerError);
+                .Produces<ApiErrorResponse>(StatusCodes.Status500InternalServerError);
 
             app.MapGet("/api/orders/{id}", GetOrderById)
                 .WithTags("Orders")
                 .WithSummary("Obtener detalle de una orden")
                 .WithDescription("Errores: ORD-001 (404) orden no encontrada; ORD-007 (500).")
                 .Produces<Order>(StatusCodes.Status200OK)
-                .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status500InternalServerError);
+                .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
+                .Produces<ApiErrorResponse>(StatusCodes.Status500InternalServerError);
 
             app.MapPost("/api/orders", CreateOrder)
                 .WithTags("Orders")
                 .WithSummary("Crear nueva orden")
                 .WithDescription("Valida usuario en Users API y productos/stock en Products API. Errores: ORD-002 (400) datos inválidos; ORD-003 (404) usuario no encontrado; ORD-004 (404) producto no encontrado; ORD-005 (422) stock insuficiente; ORD-007 (500).")
                 .Produces<Order>(StatusCodes.Status201Created)
-                .ProducesProblem(StatusCodes.Status400BadRequest)
-                .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
-                .ProducesProblem(StatusCodes.Status500InternalServerError);
+                .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+                .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
+                .Produces<ApiErrorResponse>(StatusCodes.Status422UnprocessableEntity)
+                .Produces<ApiErrorResponse>(StatusCodes.Status500InternalServerError);
 
             app.MapPut("/api/orders/{id}/status", UpdateOrderStatus)
                 .WithTags("Orders")
                 .WithSummary("Actualizar estado de la orden")
                 .WithDescription("Transiciones válidas: Pendiente→Confirmada/Cancelada; Confirmada→Enviada/Cancelada; Enviada→Entregada. Errores: ORD-002 (400) estado inválido; ORD-001 (404) orden no encontrada; ORD-006 (409) transición inválida; ORD-007 (500).")
                 .Produces<UpdateOrderStatusResponse>(StatusCodes.Status200OK)
-                .ProducesProblem(StatusCodes.Status400BadRequest)
-                .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status409Conflict)
-                .ProducesProblem(StatusCodes.Status500InternalServerError);
+                .Produces<ApiErrorResponse>(StatusCodes.Status400BadRequest)
+                .Produces<ApiErrorResponse>(StatusCodes.Status404NotFound)
+                .Produces<ApiErrorResponse>(StatusCodes.Status409Conflict)
+                .Produces<ApiErrorResponse>(StatusCodes.Status500InternalServerError);
 
-            // SOLO PARA PROBAR: borrar junto con OrdersMockEndpoints.cs antes de entregar
-            if (UsarServiciosSimulados)
+            
+            if (SimularUsers)
             {
                 app.MapOrdersMockEndpoints();
             }
         }
 
         // ───────── GET /api/orders ─────────
-        private static async Task<IResult> GetAllOrders(string? usuarioId, OrderRepository repo, HttpContext ctx)
+        private static async Task<IResult> GetAllOrders(string? usuarioId, OrderRepository repo)
         {
-            try
+            Guid? filtro = null;
+            if (!string.IsNullOrWhiteSpace(usuarioId))
             {
-                Guid? filtro = null;
-                if (!string.IsNullOrWhiteSpace(usuarioId))
+                Guid idParseado;
+                if (!Guid.TryParse(usuarioId, out idParseado))
                 {
-                    Guid idParseado;
-                    if (!Guid.TryParse(usuarioId, out idParseado))
-                    {
-                      
-                        return Results.Ok(new List<Order>());
-                    }
-                    filtro = idParseado;
+                    return Results.Ok(new List<Order>());
                 }
+                filtro = idParseado;
+            }
 
-                List<Order> orders = await repo.GetAllAsync(filtro);
-                return Results.Ok(orders);
-            }
-            catch (Exception ex)
-            {
-                return InternalError(ctx, ex);
-            }
+            List<Order> orders = await repo.GetAllAsync(filtro);
+            return Results.Ok(orders);
         }
 
         // ───────── GET /api/orders/{id} ─────────
-        private static async Task<IResult> GetOrderById(string id, OrderRepository repo, HttpContext ctx)
+        private static async Task<IResult> GetOrderById(string id, OrderRepository repo)
         {
-            try
+            Guid orderId;
+            if (!Guid.TryParse(id, out orderId))
             {
-                Guid orderId;
-                if (!Guid.TryParse(id, out orderId))
-                {
-                    return Problem(ctx, 404, OrderErrorCodes.NotFound, "Orden no encontrada.");
-                }
-
-                Order? order = await repo.GetByIdAsync(orderId);
-                if (order == null)
-                {
-                    return Problem(ctx, 404, OrderErrorCodes.NotFound, "Orden no encontrada.");
-                }
-
-                return Results.Ok(order);
+                throw new NotFoundException(OrderErrorCodes.NotFound, "Orden no encontrada.");
             }
-            catch (Exception ex)
+
+            Order? order = await repo.GetByIdAsync(orderId);
+            if (order == null)
             {
-                return InternalError(ctx, ex);
+                throw new NotFoundException(OrderErrorCodes.NotFound, "Orden no encontrada.");
             }
+
+            return Results.Ok(order);
         }
 
         // ───────── POST /api/orders ─────────
         private static async Task<IResult> CreateOrder(CreateOrderRequest? req, OrderRepository repo,
                                                        IHttpClientFactory httpFactory, HttpContext ctx)
         {
-            try
+            // 1. Validar el body (ORD-002)
+            List<string> errores = ValidarCreateRequest(req);
+            if (errores.Count > 0)
             {
-                
-                List<string> errores = ValidarCreateRequest(req);
-                if (errores.Count > 0)
-                {
-                    return Problem(ctx, 400, OrderErrorCodes.InvalidData,
-                        "Los datos de la orden son inválidos: " + string.Join("; ", errores) + ".");
-                }
-
-                CreateOrderRequest pedido = req!; 
-
-                
-                List<CreateOrderItemRequest> itemsPedidos = AgruparItems(pedido.Items!);
-
-                HttpClient client = httpFactory.CreateClient();
-                string correlationId = GetCorrelationId(ctx);
-
-               
-                string userUrl = GetUsersUrl() + "/api/users/" + pedido.UsuarioId;
-                using HttpResponseMessage userResp = await GetConCorrelationId(client, userUrl, correlationId);
-
-                if (userResp.StatusCode == HttpStatusCode.NotFound)
-                {
-                    return Problem(ctx, 404, OrderErrorCodes.UserNotFound,
-                        "Usuario no encontrado al crear la orden.");
-                }
-                userResp.EnsureSuccessStatusCode(); 
-
-                
-                List<OrderItem> items = new List<OrderItem>();
-
-                foreach (CreateOrderItemRequest item in itemsPedidos)
-                {
-                    string productUrl = GetProductsUrl() + "/api/products/" + item.ProductoId;
-                    using HttpResponseMessage prodResp = await GetConCorrelationId(client, productUrl, correlationId);
-
-                    if (prodResp.StatusCode == HttpStatusCode.NotFound)
-                    {
-                        return Problem(ctx, 404, OrderErrorCodes.ProductNotFound,
-                            "Producto no encontrado al crear la orden: " + item.ProductoId + ".");
-                    }
-                    prodResp.EnsureSuccessStatusCode();
-
-                    ProductInfo? product = await prodResp.Content.ReadFromJsonAsync<ProductInfo>();
-                    if (product == null)
-                    {
-                        throw new InvalidOperationException("Products API devolvió una respuesta vacía.");
-                    }
-
-                    
-                    if (product.Precio <= 0 || product.Id != item.ProductoId)
-                    {
-                        throw new InvalidOperationException("La respuesta de Products API no respeta el                    contrato (id/precio).");
-                    }
-
-                    if (product.Stock < item.Cantidad)
-                    {
-                        return Problem(ctx, 422, OrderErrorCodes.InsufficientStock,
-                            $"Stock insuficiente para '{product.Nombre}'. Disponible: {product.Stock}, solicitado: {item.Cantidad}.");
-                    }
-
-                    items.Add(new OrderItem
-                    {
-                        ProductoId = item.ProductoId,
-                        Cantidad = item.Cantidad,
-                        PrecioUnitario = product.Precio 
-                    });
-                }
-
-                
-                Order order = await repo.CreateAsync(pedido.UsuarioId, items);
-                return Results.Created("/api/orders/" + order.Id, order);
+                throw new ValidationException(OrderErrorCodes.InvalidData,
+                    "Los datos de la orden son inválidos: " + string.Join("; ", errores) + ".");
             }
-            catch (Exception ex)
+
+            CreateOrderRequest pedido = req!;
+
+            
+            List<CreateOrderItemRequest> itemsPedidos = AgruparItems(pedido.Items!);
+
+            HttpClient client = httpFactory.CreateClient();
+            string correlationId = ErrorResponseFactory.GetCorrelationId(ctx);
+
+            // 2. Validar usuario en Users API (ORD-003)
+            
+            string userUrl = GetUsersUrl(ctx) + "/api/users/" + pedido.UsuarioId;
+            using HttpResponseMessage userResp = await GetConCorrelationId(client, userUrl, correlationId);
+
+            if (userResp.StatusCode == HttpStatusCode.NotFound)
             {
-                return InternalError(ctx, ex);
+                throw new NotFoundException(OrderErrorCodes.UserNotFound,
+                    "Usuario no encontrado al crear la orden.");
             }
+            userResp.EnsureSuccessStatusCode(); // otro error de Users API -> GlobalExceptionHandler -> ORD-007
+
+            // 3. Validar productos (ORD-004) y stock (ORD-005) en Products API
+            List<OrderItem> items = new List<OrderItem>();
+
+            foreach (CreateOrderItemRequest item in itemsPedidos)
+            {
+                string productUrl = ProductsApiUrl + "/api/products/" + item.ProductoId;
+                using HttpResponseMessage prodResp = await GetConCorrelationId(client, productUrl, correlationId);
+
+                if (prodResp.StatusCode == HttpStatusCode.NotFound)
+                {
+                    throw new NotFoundException(OrderErrorCodes.ProductNotFound,
+                        "Producto no encontrado al crear la orden: " + item.ProductoId + ".");
+                }
+                prodResp.EnsureSuccessStatusCode();
+
+                ProductInfo? product = await prodResp.Content.ReadFromJsonAsync<ProductInfo>();
+                if (product == null)
+                {
+                    throw new InvalidOperationException("Products API devolvió una respuesta vacía.");
+                }
+
+                // Apéndice A
+                
+                if (product.Precio <= 0 || product.Id != item.ProductoId)
+                {
+                    throw new InvalidOperationException("La respuesta de Products API no respeta el contrato (id/precio).");
+                }
+
+                if (product.Stock < item.Cantidad)
+                {
+                    throw new BusinessRuleException(OrderErrorCodes.InsufficientStock,
+                        $"Stock insuficiente para '{product.Nombre}'. Disponible: {product.Stock}, solicitado: {item.Cantidad}.",
+                        StatusCodes.Status422UnprocessableEntity);
+                }
+
+                items.Add(new OrderItem
+                {
+                    ProductoId = item.ProductoId,
+                    Cantidad = item.Cantidad,
+                    PrecioUnitario = product.Precio // se captura al crear la orden
+                });
+            }
+
+            // 4. Guardar (Total y estado Pendiente se calculan en el repositorio)
+            Order order = await repo.CreateAsync(pedido.UsuarioId, items);
+            return Results.Created("/api/orders/" + order.Id, order);
         }
 
         // ───────── PUT /api/orders/{id}/status ─────────
-        private static async Task<IResult> UpdateOrderStatus(string id, UpdateOrderStatusRequest? req,
-                                                             OrderRepository repo, HttpContext ctx)
+        private static async Task<IResult> UpdateOrderStatus(string id, UpdateOrderStatusRequest? req, OrderRepository repo)
         {
-            try
+            string nuevoEstado;
+            if (req == null || !OrderStatus.TryNormalize(req.Estado, out nuevoEstado))
             {
-                string nuevoEstado;
-                if (req == null || !OrderStatus.TryNormalize(req.Estado, out nuevoEstado))
-                {
-                    return Problem(ctx, 400, OrderErrorCodes.InvalidData,
-                        "El estado es inválido. Valores permitidos: " + string.Join(", ", OrderStatus.All) + ".");
-                }
-
-                Guid orderId;
-                if (!Guid.TryParse(id, out orderId))
-                {
-                    return Problem(ctx, 404, OrderErrorCodes.NotFound, "Orden no encontrada.");
-                }
-
-                Order? order = await repo.GetByIdAsync(orderId);
-                if (order == null)
-                {
-                    return Problem(ctx, 404, OrderErrorCodes.NotFound, "Orden no encontrada.");
-                }
-
-                if (!OrderStatus.CanTransition(order.Estado, nuevoEstado))
-                {
-                    return Problem(ctx, 409, OrderErrorCodes.InvalidTransition,
-                        $"Una orden en estado '{order.Estado}' no puede pasar a '{nuevoEstado}'.");
-                }
-
-                DateTime? fecha = await repo.UpdateStatusAsync(orderId, nuevoEstado);
-                if (fecha == null)
-                {
-                    return Problem(ctx, 404, OrderErrorCodes.NotFound, "Orden no encontrada.");
-                }
-
-                return Results.Ok(new UpdateOrderStatusResponse(orderId, nuevoEstado, fecha.Value));
+                throw new ValidationException(OrderErrorCodes.InvalidData,
+                    "El estado es inválido. Valores permitidos: " + string.Join(", ", OrderStatus.All) + ".");
             }
-            catch (Exception ex)
+
+            Guid orderId;
+            if (!Guid.TryParse(id, out orderId))
             {
-                return InternalError(ctx, ex);
+                throw new NotFoundException(OrderErrorCodes.NotFound, "Orden no encontrada.");
             }
+
+            Order? order = await repo.GetByIdAsync(orderId);
+            if (order == null)
+            {
+                throw new NotFoundException(OrderErrorCodes.NotFound, "Orden no encontrada.");
+            }
+
+            if (!OrderStatus.CanTransition(order.Estado, nuevoEstado))
+            {
+                throw new BusinessRuleException(OrderErrorCodes.InvalidTransition,
+                    $"Una orden en estado '{order.Estado}' no puede pasar a '{nuevoEstado}'.",
+                    StatusCodes.Status409Conflict);
+            }
+
+            DateTime? fecha = await repo.UpdateStatusAsync(orderId, nuevoEstado);
+            if (fecha == null)
+            {
+                throw new NotFoundException(OrderErrorCodes.NotFound, "Orden no encontrada.");
+            }
+
+            return Results.Ok(new UpdateOrderStatusResponse(orderId, nuevoEstado, fecha.Value));
         }
 
-
+        // ───────── Auxiliares ─────────
 
         private static List<string> ValidarCreateRequest(CreateOrderRequest? req)
         {
@@ -333,114 +292,27 @@ namespace MiniApi.Extensions.Endpoints
             return resultado;
         }
 
-        private static string GetUsersUrl()
+        // Arma la URL del mock con el mismo host y puerto donde está corriendo la app
+        private static string GetMockUrl(HttpContext ctx)
         {
-            if (UsarServiciosSimulados)
+            return ctx.Request.Scheme + "://" + ctx.Request.Host + "/mock";
+        }
+
+        private static string GetUsersUrl(HttpContext ctx)
+        {
+            if (SimularUsers)
             {
-                return MockApiUrl;
+                return GetMockUrl(ctx);
             }
             return UsersApiUrl;
         }
 
-        private static string GetProductsUrl()
-        {
-            if (UsarServiciosSimulados)
-            {
-                return MockApiUrl;
-            }
-            return ProductsApiUrl;
-        }
-        private static string GetCorrelationId(HttpContext ctx)
-        {
-            string valor = ctx.Request.Headers[CorrelationHeader].ToString();
-            if (string.IsNullOrEmpty(valor))
-            {
-                valor = ctx.Response.Headers[CorrelationHeader].ToString();
-            }
-            if (string.IsNullOrEmpty(valor))
-            {
-                valor = ctx.TraceIdentifier;
-            }
-            return valor;
-        }
-
+        // GET a otro microservicio propagando el X-Correlation-Id (sección 5.5)
         private static async Task<HttpResponseMessage> GetConCorrelationId(HttpClient client, string url, string correlationId)
         {
             HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Add(CorrelationHeader, correlationId);
             return await client.SendAsync(request);
-        }
-
-        private static ILogger GetLogger(HttpContext ctx)
-        {
-            return ctx.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Orders");
-        }
-
-       
-        private static IResult InternalError(HttpContext ctx, Exception ex)
-        {
-            GetLogger(ctx).LogError(ex, "Error inesperado {ErrorCode} en {Endpoint}",
-                OrderErrorCodes.Internal, ctx.Request.Path.Value);
-
-            return Problem(ctx, 500, OrderErrorCodes.Internal, "Error interno al procesar la orden.");
-        }
-
-        private static IResult Problem(HttpContext ctx, int status, string errorCode, string errorMessage)
-        {
-            string type;
-            string title;
-            string detail;
-
-            if (status == 400)
-            {
-                type = "https://tools.ietf.org/html/rfc7231#section-6.5.1";
-                title = "Bad Request";
-                detail = "La solicitud no es válida.";
-            }
-            else if (status == 404)
-            {
-                type = "https://tools.ietf.org/html/rfc7231#section-6.5.4";
-                title = "Not Found";
-                detail = "El recurso solicitado no fue encontrado.";
-            }
-            else if (status == 409)
-            {
-                type = "https://tools.ietf.org/html/rfc7231#section-6.5.9";
-                title = "Conflict";
-                detail = "No se puede modificar el estado.";
-            }
-            else if (status == 422)
-            {
-                type = "https://tools.ietf.org/html/rfc4918#section-11.2";
-                title = "Unprocessable Entity";
-                detail = "No se puede procesar la solicitud.";
-            }
-            else
-            {
-                type = "https://tools.ietf.org/html/rfc7231#section-6.6.1";
-                title = "Internal Server Error";
-                detail = "Ocurrió un error interno.";
-            }
-
- 
-            if (status < 500)
-            {
-                GetLogger(ctx).LogWarning("Error de negocio {ErrorCode} en {Endpoint}: {ErrorMessage}",
-                    errorCode, ctx.Request.Path.Value, errorMessage);
-            }
-
-            Dictionary<string, object?> extras = new Dictionary<string, object?>();
-            extras["errorCode"] = errorCode;
-            extras["errorMessage"] = errorMessage;
-            extras["correlationId"] = GetCorrelationId(ctx);
-
-            return Results.Problem(
-                type: type,
-                title: title,
-                detail: detail,
-                statusCode: status,
-                instance: ctx.Request.Path.Value,
-                extensions: extras);
         }
     }
 }

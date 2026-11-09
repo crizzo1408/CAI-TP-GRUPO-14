@@ -30,6 +30,8 @@ namespace MiniApi.Extensions
                 ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
             });
             app.MapHealthChecksUI(setup => setup.UIPath = "/health-ui");
+
+            app.UseExceptionHandler();
         }
     }
 }
