@@ -1,7 +1,8 @@
 <Solution>
-  <Project Path="MiniApi/MiniApi.csproj" />
   <Folder Name="/src/">
+    <Project Path="src/Cart.API/Cart.API.csproj" />
     <Project Path="src/Notifications.API/Notifications.API.csproj" />
+    <Project Path="src/Orders.API/Orders.API.csproj" />
     <Project Path="src/Products.API/Products.API.csproj" />
     <Project Path="src/Users.API/Users.API.csproj" />
   </Folder>
