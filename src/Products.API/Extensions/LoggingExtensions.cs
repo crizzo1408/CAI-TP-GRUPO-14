@@ -17,9 +17,6 @@ public static class LoggingExtensions
             .MinimumLevel.Override(
                 "Microsoft",
                 LogEventLevel.Warning)
-            .MinimumLevel.Override(
-                "Microsoft.AspNetCore.Hosting.Diagnostics",
-                LogEventLevel.Information)
             .Enrich.FromLogContext()
             .Enrich.WithProperty(
                 "Service",
@@ -28,6 +25,8 @@ public static class LoggingExtensions
                 outputTemplate:
                 "[{Timestamp:HH:mm:ss} {Level:u3}] " +
                 "[{Service}] " +
+                "[{CorrelationId}] " +
+                "[{Endpoint}] " +
                 "{Message:lj}" +
                 "{NewLine}{Exception}")
             .WriteTo.File(
