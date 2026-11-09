@@ -133,6 +133,11 @@ public class UserService : IUserService
         return response;
     }
 
+    public Task<bool> ExistsByIdAsync(Guid id)
+    {
+        return _repository.ExistsByIdAsync(id);
+    }
+
     /// <summary>
     /// Un usuario inactivo puede estar bloqueado por dos motivos:
     /// - acumuló 3 o más intentos fallidos → USR-004

@@ -1,0 +1,9 @@
+[Bb]in/
+[Oo]bj/
+.vs/
+*.user
+notifications.db
+*.db-shm
+*.db-wal
+logs/
+*.log

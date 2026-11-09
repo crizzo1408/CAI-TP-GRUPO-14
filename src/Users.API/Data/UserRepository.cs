@@ -72,6 +72,15 @@ public class UserRepository : IUserRepository
         return count > 0;
     }
 
+    public async Task<bool> ExistsByIdAsync(Guid id)
+    {
+        using var connection = CreateConnection();
+        long count = await connection.ExecuteScalarAsync<long>(
+            "SELECT COUNT(*) FROM users WHERE id = @Id",
+            new { Id = id.ToString() });
+        return count > 0;
+    }
+
     public async Task CreateAsync(User user)
     {
         int activo = 0;
