@@ -9,6 +9,8 @@ namespace MiniApi.Extensions
     {
         public static void UseAppMiddleware(this WebApplication app)
         {
+            // Sección 5.5: tiene que ir primero para que todo el request use el mismo id
+            app.UseMiddleware<CorrelationIdMiddleware>();
             if (app.Environment.IsDevelopment())
             {
                 app.UseSwagger();
