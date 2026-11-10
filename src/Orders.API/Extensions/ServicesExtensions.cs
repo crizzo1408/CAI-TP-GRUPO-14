@@ -31,7 +31,7 @@ namespace MiniApi.Extensions
             services.AddSwaggerGen();
 
             services.AddHealthChecks()
-                .AddCheck<SqliteHealthCheck>("sqlite-db", tags: ["database"])
+                .AddCheck<SqliteHealthCheck>("sqlite-db", tags: ["database", "ready"])
                 .AddCheck<ApiStatusCheck>("api-status", tags: ["api"]);
 
             services.AddHealthChecksUI(setup =>

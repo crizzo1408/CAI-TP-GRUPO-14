@@ -20,8 +20,8 @@ public partial class Program
             scope.ServiceProvider.GetRequiredService<DatabaseInitializer>().Initialize();
         // Log de ejemplo
         var logger = app.Services.GetRequiredService<ILogger<Program>>();
-        logger.LogError("OK");
-        
+        logger.LogInformation("Orders.API iniciado");
+
         // 4. Middleware (Swagger UI, Serilog, HealthChecks)
         app.UseAppMiddleware(); 
         

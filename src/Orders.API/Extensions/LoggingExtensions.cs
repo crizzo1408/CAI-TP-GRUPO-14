@@ -1,25 +1,39 @@
 ﻿using Serilog;
 using Serilog.Events;
 using Serilog.Filters;
+using Serilog.Formatting.Json;
 
 namespace MiniApi.Extensions
 {
     public static class LoggingExtensions
     {
+        public const string ServiceName = "Orders.API";
+
+        /// <summary>
+        /// Sección 5.3: consola en formato legible y archivo en JSON estructurado.
+        /// Cada log incluye Timestamp, Level, Service, Endpoint, CorrelationId y ErrorCode cuando aplica.
+        /// Hosting.Diagnostics registra el inicio y el fin de cada request con su duración.
+        /// </summary>
         public static void AddAppLogging(this WebApplicationBuilder builder)
         {
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Information()
                 .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
                 .MinimumLevel.Override("Microsoft.AspNetCore.Hosting.Diagnostics", LogEventLevel.Information)
-                .Enrich.FromLogContext()
+                .Enrich.FromLogContext()                       // CorrelationId y Endpoint (los agrega CorrelationIdMiddleware)
+                .Enrich.WithProperty("Service", ServiceName)
 
-                // ALUMNO: LOG DE CONSOLA: libre para usarse como quieran
-                .WriteTo.Logger(lc => lc
-                    .Filter.ByIncludingOnly(le => le.Level >= LogEventLevel.Error)
-                    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}"))
+                // Consola: formato legible
+                .WriteTo.Console(outputTemplate:
+                    "[{Timestamp:HH:mm:ss} {Level:u3}] [{Service}] [{CorrelationId}] {Message:lj}{NewLine}{Exception}")
 
-                // ALUMNO: LOG DE CONSOLA: Solo registra cuando se consume un endpoint, es una auditoría limpia. 
+                // Archivo logs/orders-AAAAMMDD.json: JSON estructurado, un evento por línea
+                .WriteTo.File(
+                    formatter: new JsonFormatter(renderMessage: true),
+                    path: "logs/orders-.json",
+                    rollingInterval: RollingInterval.Day)
+
+                // ALUMNO: LOG DE AUDITORÍA: solo registra cuando se consume un endpoint, es una auditoría limpia.
                 .WriteTo.Logger(lc => lc
                     .Filter.ByIncludingOnly(le =>
                     {
@@ -40,7 +54,7 @@ namespace MiniApi.Extensions
                     })
                     .WriteTo.File(
                         path: "logs/audit.log",
-                        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss} | {RequestMethod} | {RequestPath} | {StatusCode}{NewLine}",
+                        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss} | {CorrelationId} | {RequestMethod} | {RequestPath} | {StatusCode}{NewLine}",
                         rollingInterval: RollingInterval.Day))
                 .CreateLogger();
 
