@@ -358,7 +358,7 @@ Dentro de cada API se separan las responsabilidades en modelos, DTOs, persistenc
 
 ## Capturas de Swagger UI
 
-Las capturas de Swagger UI con ejemplos de respuestas de error (`errorCode` y `errorMessage`) se encuentran en la carpeta [`docs/Captura Errores`]
+Las capturas de Swagger UI con ejemplos de respuestas de error (`errorCode` y `errorMessage`) se encuentran en la carpeta [`docs/Captura Errores`](docs/Captura%20Errores).
 
 Incluyen errores de cada microservicio, pruebas de integracion entre servicios (Orders y Notifications validando contra Users API, Cart validando contra Products API), el seguimiento de un mismo Correlation ID entre servicios y los Health Checks. Cada archivo esta nombrado con el servicio, el endpoint, el codigo HTTP y el codigo de error, por ejemplo `users-register-409-USR-001.png`.
 
